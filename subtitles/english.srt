@@ -1,0 +1,16 @@
+1
+00:00:37,800 --> 00:00:40,007
+<i>This is the Persian empire...</i>
+
+2
+00:00:40,240 --> 00:00:42,368
+<i>...known today as Iran.</i>
+
+3
+00:00:43,280 --> 00:00:47,330
+<i>For 2500 years, this land was ruled
+by a series of kings...</i>
+
+4
+00:00:47,520 --> 00:00:49,045
+<i>...known as shahs.</i>
