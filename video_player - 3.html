@@ -161,7 +161,11 @@
                             </button>
                             <div class="volume-slider-container" id="volumeSliderContainer">
                                 <div class="volume-number" id="volumeNumber">100</div>
-                                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100">
+                                <div class="volume-progress-container">
+                                    <div class="volume-progress-fill" id="volumeProgressFill"></div>
+                                    <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="100" orient="vertical">
+                                    <div class="volume-thumb" id="volumeThumb"></div>
+                                </div>
                             </div>
                         </div>
 

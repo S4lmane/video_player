@@ -49,6 +49,102 @@ let videoLibrary = [
         url: "./videos/Utopia_Soundtrack.mp4",
         thumbnail: "./videos/Utopia_Soundtrack.png",
         subtitles: null
+    },
+    {
+        id: 6,
+        title: "Lalo Salamanca",
+        duration: "127:59",
+        type: "MP4",
+        url: "./videos/lalo_salamanca.mp4",
+        thumbnail: "./videos/lalo_salamanca.jpg",
+        subtitles: [
+            { language: "English", url: "./subtitles/english.srt" },
+            { language: "Spanish", url: "./subtitles/spanish.srt" }
+        ]
+    },
+    {
+        id: 7,
+        title: "5 Second",
+        duration: "1:45",
+        type: "MP4",
+        url: "./videos/5sec_vid.mp4",
+        thumbnail: "./videos/5sec_vid.jpg",
+        subtitles: null
+    },
+    {
+        id: 8,
+        title: "The Conjuring: Last Rites",
+        duration: "3:20",
+        type: "MP4",
+        url: "./videos/theconjuring.mp4",
+        thumbnail: "./videos/theconjuring.jpg",
+        subtitles: null
+    },
+    {
+        id: 9,
+        title: "As Above, So Below",
+        duration: "3:20",
+        type: "MP4",
+        url: "./videos/As Above So Below.mp4",
+        thumbnail: "./videos/As Above So Below.jpg",
+        subtitles: null
+    },
+    {
+        id: 10,
+        title: "Utopia - Soundtrack",
+        duration: "3:20",
+        type: "MP4",
+        url: "./videos/Utopia_Soundtrack.mp4",
+        thumbnail: "./videos/Utopia_Soundtrack.png",
+        subtitles: null
+    },
+    {
+        id: 11,
+        title: "Lalo Salamanca",
+        duration: "127:59",
+        type: "MP4",
+        url: "./videos/lalo_salamanca.mp4",
+        thumbnail: "./videos/lalo_salamanca.jpg",
+        subtitles: [
+            { language: "English", url: "./subtitles/english.srt" },
+            { language: "Spanish", url: "./subtitles/spanish.srt" }
+        ]
+    },
+    {
+        id: 12,
+        title: "5 Second",
+        duration: "1:45",
+        type: "MP4",
+        url: "./videos/5sec_vid.mp4",
+        thumbnail: "./videos/5sec_vid.jpg",
+        subtitles: null
+    },
+    {
+        id: 13,
+        title: "The Conjuring: Last Rites",
+        duration: "3:20",
+        type: "MP4",
+        url: "./videos/theconjuring.mp4",
+        thumbnail: "./videos/theconjuring.jpg",
+        subtitles: null
+    },
+    {
+        id: 14,
+        title: "As Above, So Below",
+        duration: "3:20",
+        type: "MP4",
+        url: "./videos/As Above So Below.mp4",
+        thumbnail: "./videos/As Above So Below.jpg",
+        subtitles: null
+    },
+    {
+        id: 15,
+        title: "Utopia - Soundtrack",
+        duration: "3:20",
+        type: "MP4",
+        url: "./videos/Utopia_Soundtrack.mp4",
+        thumbnail: "./videos/Utopia_Soundtrack.png",
+        subtitles: null
     }
 ];
 
@@ -721,6 +817,169 @@ function playVideo(videoId) {
     document.getElementById('centerPlayBtn').classList.remove('hidden');
     loadAvailableSubtitles();
     isMiniPlayerMode = false;
+    initializeVolumeControl(); // Initialize volume control when playing a new video
+}
+
+// Adaptive Volume Control with Background Detection
+function detectVideoBackgroundBrightness() {
+    const video = document.getElementById('mainVideoPlayer');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = 100;
+    canvas.height = 100;
+
+    try {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+
+        let totalBrightness = 0;
+        let pixelCount = 0;
+
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
+            totalBrightness += brightness;
+            pixelCount++;
+        }
+
+        const averageBrightness = totalBrightness / pixelCount;
+        return averageBrightness > 128;
+    } catch (error) {
+        console.log('Could not analyze video brightness:', error);
+        return false;
+    }
+}
+
+function updateVolumeContainerBackground() {
+    const volumeContainer = document.getElementById('volumeSliderContainer');
+    if (!volumeContainer) return;
+
+    const isLightBackground = detectVideoBackgroundBrightness();
+
+    if (isLightBackground) {
+        volumeContainer.classList.add('light-bg');
+    } else {
+        volumeContainer.classList.remove('light-bg');
+    }
+}
+
+function updateVolumeIcon() {
+    const player = document.getElementById('mainVideoPlayer');
+    const muteBtn = document.getElementById('muteBtn');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeNumber = document.getElementById('volumeNumber');
+    const volumeProgressFill = document.getElementById('volumeProgressFill');
+    const volumeThumb = document.getElementById('volumeThumb');
+
+    const currentVolume = player.muted ? 0 : Math.round(player.volume * 100);
+
+    if (volumeSlider) volumeSlider.value = currentVolume;
+    if (volumeNumber) volumeNumber.textContent = currentVolume;
+
+    if (volumeProgressFill) {
+        volumeProgressFill.style.height = currentVolume + '%';
+    }
+
+    if (volumeThumb) {
+        const thumbPosition = 100 - currentVolume;
+        volumeThumb.style.top = thumbPosition + '%';
+    }
+
+    if (muteBtn) {
+        const iconElement = muteBtn.querySelector('.material-icons');
+        if (iconElement) {
+            if (player.muted || player.volume === 0) {
+                iconElement.textContent = 'volume_off';
+                muteBtn.style.color = 'var(--disabled-color)';
+            } else if (player.volume < 0.3) {
+                iconElement.textContent = 'volume_down';
+                muteBtn.style.color = 'var(--text-primary)';
+            } else if (player.volume < 0.7) {
+                iconElement.textContent = 'volume_up';
+                muteBtn.style.color = 'var(--text-primary)';
+            } else {
+                iconElement.textContent = 'volume_up';
+                muteBtn.style.color = 'var(--secondary)';
+            }
+        }
+    }
+
+    updateVolumeContainerBackground();
+}
+
+function setupVolumeSlider() {
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeBtn = document.getElementById('muteBtn');
+    const volumeSliderContainer = document.getElementById('volumeSliderContainer');
+    const player = document.getElementById('mainVideoPlayer');
+
+    if (!volumeSlider || !volumeBtn || !volumeSliderContainer || !player) {
+        console.warn('Volume control elements not found');
+        return;
+    }
+
+    volumeSlider.addEventListener('input', function() {
+        const volume = volumeSlider.value / 100;
+        player.volume = volume;
+        player.muted = false;
+        updateVolumeIcon();
+        console.log('Volume changed to:', volume);
+    });
+
+    volumeBtn.addEventListener('mouseenter', function() {
+        clearTimeout(volumeSliderTimeout);
+        volumeSliderContainer.classList.add('show');
+        updateVolumeContainerBackground();
+    });
+
+    volumeBtn.addEventListener('mouseleave', function() {
+        volumeSliderTimeout = setTimeout(() => {
+            if (!volumeSliderContainer.matches(':hover')) {
+                volumeSliderContainer.classList.remove('show');
+            }
+        }, 200);
+    });
+
+    volumeSliderContainer.addEventListener('mouseenter', function() {
+        clearTimeout(volumeSliderTimeout);
+    });
+
+    volumeSliderContainer.addEventListener('mouseleave', function() {
+        volumeSliderTimeout = setTimeout(() => {
+            volumeSliderContainer.classList.remove('show');
+        }, 200);
+    });
+
+    volumeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleMute();
+    });
+
+    player.addEventListener('timeupdate', function() {
+        if (Math.floor(player.currentTime) % 2 === 0) {
+            updateVolumeContainerBackground();
+        }
+    });
+
+    updateVolumeIcon();
+}
+
+function toggleMute() {
+    const player = document.getElementById('mainVideoPlayer');
+    if (!player) return;
+
+    player.muted = !player.muted;
+    updateVolumeIcon();
+    showActionFeedback(player.muted ? 'volume_off' : 'volume_up', player.muted ? 'Muted' : 'Unmuted');
+    console.log('Mute toggled:', player.muted);
+}
+
+function initializeVolumeControl() {
+    setupVolumeSlider();
 }
 
 function setupVideoPlayer() {
@@ -734,9 +993,6 @@ function setupVideoPlayer() {
     const playerContainer = document.getElementById('playerContainer');
     const customControls = document.getElementById('customControls');
     const playerHeader = document.getElementById('playerHeader');
-    const volumeSlider = document.getElementById('volumeSlider');
-    const volumeBtn = document.getElementById('muteBtn');
-    const volumeNumber = document.getElementById('volumeNumber');
 
     player.addEventListener('loadedmetadata', function() {
         console.log('Video metadata loaded, duration:', player.duration);
@@ -873,37 +1129,7 @@ function setupVideoPlayer() {
         }
     });
 
-    volumeBtn.addEventListener('click', function() {
-        toggleMute();
-    });
-
-    volumeSlider.addEventListener('input', function() {
-        player.volume = volumeSlider.value / 100;
-        volumeNumber.textContent = volumeSlider.value;
-        updateVolumeIcon();
-        console.log('Volume changed to:', player.volume);
-    });
-
-    volumeBtn.addEventListener('mouseenter', function() {
-        clearTimeout(volumeSliderTimeout);
-        document.getElementById('volumeSliderContainer').classList.add('show');
-    });
-
-    volumeBtn.addEventListener('mouseleave', function() {
-        volumeSliderTimeout = setTimeout(() => {
-            document.getElementById('volumeSliderContainer').classList.remove('show');
-        }, 500);
-    });
-
-    document.getElementById('volumeSliderContainer').addEventListener('mouseenter', function() {
-        clearTimeout(volumeSliderTimeout);
-    });
-
-    document.getElementById('volumeSliderContainer').addEventListener('mouseleave', function() {
-        volumeSliderTimeout = setTimeout(() => {
-            document.getElementById('volumeSliderContainer').classList.remove('show');
-        }, 500);
-    });
+    initializeVolumeControl();
 }
 
 function togglePlayPause() {
@@ -914,47 +1140,6 @@ function togglePlayPause() {
     } else {
         console.log('Pausing video');
         player.pause();
-    }
-}
-
-function toggleMute() {
-    const player = document.getElementById('mainVideoPlayer');
-    const volumeNumber = document.getElementById('volumeNumber');
-    player.muted = !player.muted;
-    updateVolumeIcon();
-    volumeNumber.textContent = player.muted ? '0' : Math.round(player.volume * 100);
-    showActionFeedback(player.muted ? 'volume_off' : 'volume_up', player.muted ? 'Muted' : 'Unmuted');
-    console.log('Mute toggled:', player.muted);
-}
-
-function updateVolumeIcon() {
-    const player = document.getElementById('mainVideoPlayer');
-    const muteBtn = document.getElementById('muteBtn');
-    const volumeSlider = document.getElementById('volumeSlider');
-    const volumeNumber = document.getElementById('volumeNumber');
-    const volumeContainer = document.getElementById('volumeSliderContainer');
-
-    const currentVolume = player.muted ? 0 : Math.round(player.volume * 100);
-
-    volumeSlider.value = player.volume * 100;
-    volumeNumber.textContent = currentVolume;
-
-    if (volumeContainer) {
-        volumeContainer.style.setProperty('--volume-percent', currentVolume);
-    }
-
-    if (player.muted || player.volume === 0) {
-        muteBtn.innerHTML = '<span class="material-icons">volume_off</span>';
-        muteBtn.style.color = 'var(--disabled-color)';
-    } else if (player.volume < 0.3) {
-        muteBtn.innerHTML = '<span class="material-icons">volume_down</span>';
-        muteBtn.style.color = 'var(--text-primary)';
-    } else if (player.volume < 0.7) {
-        muteBtn.innerHTML = '<span class="material-icons">volume_up</span>';
-        muteBtn.style.color = 'var(--text-primary)';
-    } else {
-        muteBtn.innerHTML = '<span class="material-icons">volume_up</span>';
-        muteBtn.style.color = 'var(--loop-color)';
     }
 }
 
@@ -1573,17 +1758,18 @@ function setupKeyboardShortcuts() {
                 break;
             case 'arrowup':
                 e.preventDefault();
-                player.volume = Math.min(player.volume + 0.1, 1);
+                player.volume = Math.min(player.volume + 0.05, 1);
                 updateVolumeIcon();
-                showActionFeedback('volume_up', 'Volume Up');
+                showActionFeedback('volume_up', `Volume: ${Math.round(player.volume * 100)}%`);
                 break;
             case 'arrowdown':
                 e.preventDefault();
-                player.volume = Math.max(player.volume - 0.1, 0);
+                player.volume = Math.max(player.volume - 0.05, 0);
                 updateVolumeIcon();
-                showActionFeedback('volume_down', 'Volume Down');
+                showActionFeedback('volume_down', `Volume: ${Math.round(player.volume * 100)}%`);
                 break;
             case 'm':
+                e.preventDefault();
                 toggleMute();
                 break;
             case 'f':
@@ -1925,7 +2111,6 @@ function clearTestAnimation() {
     }
 }
 
-// Quick test function for all animations
 function testAllAnimations() {
     console.log('🎪 Testing all animations...');
     testplayerani('normal', 'loopall');
@@ -1944,6 +2129,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDragAndDrop();
     updatePlaybackModeUI();
     setupPlaybackModeButton();
+    initializePictureInPicture();
 
     document.getElementById('videoInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') addVideo();
