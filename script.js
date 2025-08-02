@@ -1664,13 +1664,54 @@ function setupVideoPlayer() {
 
 function togglePlayPause() {
     const player = document.getElementById('mainVideoPlayer');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const centerPlayBtn = document.getElementById('centerPlayBtn');
+
     if (player.paused) {
-        console.log('Playing video');
+        console.log('▶️ Playing video');
         player.play();
+
+        // Update full player UI
+        if (playPauseBtn) playPauseBtn.innerHTML = '<span class="material-icons">pause</span>';
+        if (centerPlayBtn) centerPlayBtn.classList.add('hidden');
+
+        // Update mini player UI if active
+        if (isMiniPlayerMode) {
+            const miniPlayBtn = document.getElementById('miniPlayBtn');
+            const miniArtwork = document.getElementById('miniArtwork');
+            if (miniPlayBtn) miniPlayBtn.innerHTML = '<span class="material-icons">pause</span>';
+            if (miniArtwork) miniArtwork.classList.add('spinning');
+        }
     } else {
-        console.log('Pausing video');
+        console.log('⏸️ Pausing video');
         player.pause();
+
+        // Update full player UI
+        if (playPauseBtn) playPauseBtn.innerHTML = '<span class="material-icons">play_arrow</span>';
+        if (centerPlayBtn) centerPlayBtn.classList.remove('hidden');
+
+        // Update mini player UI if active
+        if (isMiniPlayerMode) {
+            const miniPlayBtn = document.getElementById('miniPlayBtn');
+            const miniArtwork = document.getElementById('miniArtwork');
+            if (miniPlayBtn) miniPlayBtn.innerHTML = '<span class="material-icons">play_arrow</span>';
+            if (miniArtwork) miniArtwork.classList.remove('spinning');
+        }
     }
+}
+
+function debugAudioState(action) {
+    const player = document.getElementById('mainVideoPlayer');
+    console.log(`=== AUDIO DEBUG: ${action} ===`);
+    console.log('Current time:', player.currentTime);
+    console.log('Duration:', player.duration);
+    console.log('Paused:', player.paused);
+    console.log('Volume:', player.volume);
+    console.log('Muted:', player.muted);
+    console.log('Source:', player.src);
+    console.log('Ready state:', player.readyState);
+    console.log('Network state:', player.networkState);
+    console.log('=== END AUDIO DEBUG ===');
 }
 
 function skip(seconds) {
@@ -1755,26 +1796,25 @@ function goBack() {
 function enableMiniPlayer() {
     if (!currentVideo) {
         console.error('No current video to enable mini player');
+        showActionFeedback('error', 'No video to minimize');
         return;
     }
 
-    console.log('Enabling mini player for:', currentVideo.title);
+    console.log('🖥️→📱 Enabling mini player (seamless)');
+
+    // *** CRITICAL: Don't touch the video element at all - just change UI ***
     const player = document.getElementById('mainVideoPlayer');
-    const wasPlaying = !player.paused;
 
-    // Store current state to prevent interruption
-    const playerState = {
-        currentTime: player.currentTime,
-        paused: player.paused,
-        volume: player.volume,
-        muted: player.muted
-    };
-
+    // Set mini player mode flag first
     isMiniPlayerMode = true;
+
+    // Get UI elements
     const miniPlayer = document.getElementById('miniPlayer');
     const miniArtwork = document.getElementById('miniArtwork');
     const miniTitle = document.getElementById('miniTitle');
+    const miniPlayBtn = document.getElementById('miniPlayBtn');
 
+    // Set mini player content
     miniTitle.textContent = currentVideo.title;
 
     if (currentVideo.thumbnail) {
@@ -1783,29 +1823,30 @@ function enableMiniPlayer() {
         miniArtwork.innerHTML = '<span class="material-icons">movie</span>';
     }
 
+    // Hide full player and show mini player
     document.getElementById('playerPage').style.display = 'none';
     document.getElementById('mainPage').style.display = 'block';
     document.getElementById('mainPage').classList.add('with-mini-player');
     miniPlayer.classList.add('show');
 
-    // Restore state without interruption
+    // *** NO VIDEO STATE CHANGES - just sync UI to match current video state ***
     setTimeout(() => {
-        player.currentTime = playerState.currentTime;
-        player.volume = playerState.volume;
-        player.muted = playerState.muted;
-
-        if (wasPlaying) {
+        // Sync mini player UI with actual video state
+        if (player.paused) {
+            miniPlayBtn.innerHTML = '<span class="material-icons">play_arrow</span>';
+            miniArtwork.classList.remove('spinning');
+        } else {
+            miniPlayBtn.innerHTML = '<span class="material-icons">pause</span>';
             miniArtwork.classList.add('spinning');
-            document.getElementById('miniPlayBtn').innerHTML = '<span class="material-icons">pause</span>';
         }
 
-        // Drag is already setup globally, no need to call setupMiniPlayerDrag again
-        console.log('Mini player enabled - drag system ready');
-    }, 50);
+        // Start mini player updates
+        updateMiniPlayerProgress();
+        startMiniPlayerUpdates();
+        updateMiniInfo();
+    }, 10);
 
-    updateMiniPlayerProgress();
-    startMiniPlayerUpdates();
-    updateMiniInfo();
+    console.log('✅ Mini player enabled seamlessly - no audio interruption');
 }
 
 function switchVideoInMiniPlayer(newVideoId, shouldAutoPlay = false) {
@@ -1881,31 +1922,99 @@ function closeMiniPlayer() {
     hideMiniInfo();
 }
 
+// function expandMiniPlayer() {
+//     if (!currentVideo) {
+//         console.error('No current video to expand mini player');
+//         return;
+//     }
+
+//     console.log('Expanding mini player to full player');
+//     const player = document.getElementById('mainVideoPlayer');
+
+//     // Store current state to prevent interruption
+//     const playerState = {
+//         currentTime: player.currentTime,
+//         paused: player.paused,
+//         volume: player.volume,
+//         muted: player.muted,
+//         src: player.src
+//     };
+
+//     // Hide mini player and show full player
+//     document.getElementById('miniPlayer').classList.remove('show');
+//     document.getElementById('mainPage').classList.remove('with-mini-player');
+//     document.getElementById('mainPage').style.display = 'none';
+//     document.getElementById('playerPage').style.display = 'block';
+
+//     // Set up the player page
+//     document.getElementById('currentVideoTitle').textContent = currentVideo.title;
+//     const playerContainer = document.getElementById('playerContainer');
+//     if (currentVideo.thumbnail) {
+//         playerContainer.style.backgroundImage = `url(${currentVideo.thumbnail})`;
+//     } else {
+//         playerContainer.style.backgroundImage = 'none';
+//     }
+
+//     // Ensure the video source is correct and restore state
+//     if (player.src !== playerState.src) {
+//         player.src = playerState.src;
+//         player.load();
+
+//         player.addEventListener('loadedmetadata', function restoreState() {
+//             player.currentTime = playerState.currentTime;
+//             player.volume = playerState.volume;
+//             player.muted = playerState.muted;
+
+//             if (!playerState.paused) {
+//                 player.play();
+//             }
+
+//             updateVolumeIcon();
+//             player.removeEventListener('loadedmetadata', restoreState);
+//         }, { once: true });
+//     } else {
+//         // If source is the same, just restore state
+//         setTimeout(() => {
+//             player.currentTime = playerState.currentTime;
+//             player.volume = playerState.volume;
+//             player.muted = playerState.muted;
+
+//             if (!playerState.paused) {
+//                 player.play();
+//             }
+
+//             updateVolumeIcon();
+//         }, 50);
+//     }
+
+//     stopMiniPlayerUpdates();
+//     hideDragBlurOverlay(); // Ensure drag overlay is hidden
+//     isMiniPlayerMode = false;
+
+//     console.log('Mini player expanded successfully');
+// }
+
 function expandMiniPlayer() {
     if (!currentVideo) {
         console.error('No current video to expand mini player');
+        showActionFeedback('error', 'No video to expand');
         return;
     }
 
-    console.log('Expanding mini player to full player');
+    console.log('📱→🖥️ Expanding mini player to full player (seamless)');
+
+    // *** CRITICAL: Don't touch the video element at all - just change UI ***
     const player = document.getElementById('mainVideoPlayer');
 
-    // Store current state to prevent interruption
-    const playerState = {
-        currentTime: player.currentTime,
-        paused: player.paused,
-        volume: player.volume,
-        muted: player.muted,
-        src: player.src
-    };
-
-    // Hide mini player and show full player
+    // Hide mini player instantly
     document.getElementById('miniPlayer').classList.remove('show');
     document.getElementById('mainPage').classList.remove('with-mini-player');
     document.getElementById('mainPage').style.display = 'none';
+
+    // Show full player instantly
     document.getElementById('playerPage').style.display = 'block';
 
-    // Set up the player page
+    // Set up the player page UI (but don't touch video element)
     document.getElementById('currentVideoTitle').textContent = currentVideo.title;
     const playerContainer = document.getElementById('playerContainer');
     if (currentVideo.thumbnail) {
@@ -1914,47 +2023,47 @@ function expandMiniPlayer() {
         playerContainer.style.backgroundImage = 'none';
     }
 
-    // Ensure the video source is correct and restore state
-    if (player.src !== playerState.src) {
-        player.src = playerState.src;
-        player.load();
+    // *** NO VIDEO SOURCE CHANGES - just sync UI state ***
+    setTimeout(() => {
+        // Update volume UI to match current state
+        updateVolumeIcon();
 
-        player.addEventListener('loadedmetadata', function restoreState() {
-            player.currentTime = playerState.currentTime;
-            player.volume = playerState.volume;
-            player.muted = playerState.muted;
+        // Update play/pause button to match current state
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const centerPlayBtn = document.getElementById('centerPlayBtn');
 
-            if (!playerState.paused) {
-                player.play();
-            }
+        if (player.paused) {
+            if (playPauseBtn) playPauseBtn.innerHTML = '<span class="material-icons">play_arrow</span>';
+            if (centerPlayBtn) centerPlayBtn.classList.remove('hidden');
+        } else {
+            if (playPauseBtn) playPauseBtn.innerHTML = '<span class="material-icons">pause</span>';
+            if (centerPlayBtn) centerPlayBtn.classList.add('hidden');
+        }
 
-            updateVolumeIcon();
-            player.removeEventListener('loadedmetadata', restoreState);
-        }, { once: true });
-    } else {
-        // If source is the same, just restore state
-        setTimeout(() => {
-            player.currentTime = playerState.currentTime;
-            player.volume = playerState.volume;
-            player.muted = playerState.muted;
+        // Update time display
+        const timeInfo = document.getElementById('timeInfo');
+        if (timeInfo && player.duration) {
+            timeInfo.textContent = `${formatDuration(player.currentTime)} / ${formatDuration(player.duration)}`;
+        }
 
-            if (!playerState.paused) {
-                player.play();
-            }
+        // Update progress bar
+        const progressFilled = document.getElementById('progressFilled');
+        if (progressFilled && player.duration) {
+            const progressPercent = (player.currentTime / player.duration) * 100;
+            progressFilled.style.width = `${progressPercent}%`;
+        }
+    }, 10);
 
-            updateVolumeIcon();
-        }, 50);
-    }
-
+    // Clean up mini player state
     stopMiniPlayerUpdates();
-    hideDragBlurOverlay(); // Ensure drag overlay is hidden
+    hideDragBlurOverlay();
     isMiniPlayerMode = false;
 
-    console.log('Mini player expanded successfully');
+    console.log('✅ Mini player expanded seamlessly - no audio interruption');
 }
 
 function toggleMiniPlay() {
-    console.log('Toggling mini player play/pause');
+    console.log('🎵 Toggling mini player play/pause');
     const player = document.getElementById('mainVideoPlayer');
     const playBtn = document.getElementById('miniPlayBtn');
     const miniArtwork = document.getElementById('miniArtwork');
@@ -2635,20 +2744,23 @@ function setupKeyboardShortcuts() {
             return;
         }
 
+        // *** GLOBAL SPACE BAR - works in both mini player and full player ***
+        if (e.key === ' ') {
+            e.preventDefault();
+            handleSpaceBarToggle();
+            return;
+        }
+
         // Handle P key globally - works from both mini player and full player
         if (e.key.toLowerCase() === 'p') {
             e.preventDefault();
             handlePKeyToggle();
-            return; // Exit early to prevent other processing
+            return;
         }
 
         // Only handle video control keys when video player is visible and NOT in move mode
         if (playerPageVisible && !isMoveMode && !isContextMenuOpen) {
             switch(e.key.toLowerCase()) {
-                case ' ':
-                    e.preventDefault();
-                    togglePlayPause();
-                    break;
                 case 'arrowleft':
                     e.preventDefault();
                     skip(-10);
@@ -2714,6 +2826,46 @@ function setupKeyboardShortcuts() {
                 break;
         }
     });
+}
+
+function handleSpaceBarToggle() {
+    console.log('=== SPACE BAR TOGGLE ===');
+    console.log('isMiniPlayerMode:', isMiniPlayerMode);
+    console.log('currentVideo:', currentVideo ? currentVideo.title : 'None');
+
+    const player = document.getElementById('mainVideoPlayer');
+    const playerPageVisible = document.getElementById('playerPage').style.display !== 'none';
+
+    if (currentVideo && player) {
+        if (player.paused) {
+            console.log('▶️ Playing video (Space bar)');
+            player.play();
+            showActionFeedback('play_arrow', 'Playing');
+
+            // Update mini player UI if in mini mode
+            if (isMiniPlayerMode) {
+                const miniPlayBtn = document.getElementById('miniPlayBtn');
+                const miniArtwork = document.getElementById('miniArtwork');
+                if (miniPlayBtn) miniPlayBtn.innerHTML = '<span class="material-icons">pause</span>';
+                if (miniArtwork) miniArtwork.classList.add('spinning');
+            }
+        } else {
+            console.log('⏸️ Pausing video (Space bar)');
+            player.pause();
+            showActionFeedback('pause', 'Paused');
+
+            // Update mini player UI if in mini mode
+            if (isMiniPlayerMode) {
+                const miniPlayBtn = document.getElementById('miniPlayBtn');
+                const miniArtwork = document.getElementById('miniArtwork');
+                if (miniPlayBtn) miniPlayBtn.innerHTML = '<span class="material-icons">play_arrow</span>';
+                if (miniArtwork) miniArtwork.classList.remove('spinning');
+            }
+        }
+    } else {
+        console.log('❌ No video available for space bar control');
+        showActionFeedback('error', 'No video available');
+    }
 }
 
 function handlePKeyToggle() {
