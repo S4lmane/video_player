@@ -168,10 +168,25 @@ let playbackMode = 'normal';
 let deletedVideo = null;
 let notificationTimeout = null;
 
+let castModalVisible = false;
+let miniPlayerCurrentX = 0;
+let animationLocked = false;
+let miniPlayerCurrentY = 0;
+
 // Touch gesture variables
 let touchStartX = 0;
 let touchStartY = 0;
 let touchStartTime = 0;
+
+//drag vars
+let miniPlayerDragMode = false;
+let miniPlayerStartX = 0;
+let miniPlayerStartY = 0;
+let miniPlayerHoldTimeout = null;
+let dragBlurOverlay = null;
+let isDragging = false;
+let dragStarted = false;
+let lastTouchTime = 0;
 
 // Performance metrics
 let performanceMetrics = {
@@ -243,7 +258,13 @@ function saveProgressData() {
 
 // Library Management
 function loadLibrary() {
-    console.log('Loading video library:', videoLibrary);
+    console.log('=== LOAD LIBRARY DEBUG ===');
+    console.log('videoLibrary.length:', videoLibrary.length);
+    console.log('Current array order:');
+    videoLibrary.forEach((video, index) => {
+        console.log(`  ${index}: ${video.title} (ID: ${video.id})`);
+    });
+
     const grid = document.getElementById('videoGrid');
     const emptyState = document.getElementById('emptyState');
 
@@ -253,15 +274,24 @@ function loadLibrary() {
         return;
     }
 
-    grid.innerHTML = videoLibrary.map((video, index) => {
+    // FORCE clear the grid completely first
+    grid.innerHTML = '';
+
+    // Build the HTML string manually to ensure proper order
+    let htmlContent = '';
+
+    videoLibrary.forEach((video, index) => {
         const progress = progressData[video.id] || { currentTime: 0, duration: 0 };
         const progressPercent = progress.duration > 0 ? (progress.currentTime / progress.duration) * 100 : 0;
         const displayDuration = progress.duration > 0 ? formatDuration(progress.duration) : video.duration;
 
-        return `
+        console.log(`Building card ${index} for: ${video.title} (ID: ${video.id})`);
+
+        const cardHtml = `
             <div class="video-card"
                  data-video-id="${video.id}"
                  data-index="${index}"
+                 data-title="${video.title.replace(/"/g, '&quot;')}"
                  onclick="handleVideoClick(${video.id})"
                  onmousedown="startHold(${video.id}, event)"
                  onmouseup="endHold()"
@@ -270,7 +300,7 @@ function loadLibrary() {
                  ontouchend="endHold()">
                 <div class="video-thumbnail">
                     ${video.thumbnail ?
-                        `<img src="${video.thumbnail}" alt="${video.title}">` :
+                        `<img src="${video.thumbnail}" alt="${video.title.replace(/"/g, '&quot;')}">` :
                         `<div class="video-placeholder">
                             <span class="material-icons">movie</span>
                         </div>`
@@ -291,7 +321,62 @@ function loadLibrary() {
                 <div class="move-indicator right" onclick="moveRight(${index}, event)"></div>
             </div>
         `;
-    }).join('');
+
+        htmlContent += cardHtml;
+    });
+
+    // Set the HTML all at once
+    grid.innerHTML = htmlContent;
+
+    // Force a reflow to ensure DOM is updated
+    grid.offsetHeight;
+
+    // Verify the rendered cards match our array
+    const renderedCards = document.querySelectorAll('.video-card');
+    console.log('=== RENDERED CARDS VERIFICATION ===');
+    renderedCards.forEach((card, index) => {
+        const cardVideoId = parseInt(card.dataset.videoId);
+        const cardTitle = card.dataset.title;
+        const expectedVideo = videoLibrary[index];
+
+        console.log(`Card ${index}: ${cardTitle} (ID: ${cardVideoId})`);
+
+        if (expectedVideo && cardVideoId === expectedVideo.id) {
+            console.log(`  ✅ Matches expected: ${expectedVideo.title} (ID: ${expectedVideo.id})`);
+        } else {
+            console.error(`  ❌ MISMATCH! Expected: ${expectedVideo ? expectedVideo.title : 'undefined'} (ID: ${expectedVideo ? expectedVideo.id : 'undefined'})`);
+        }
+    });
+
+    console.log('=== END LOAD LIBRARY DEBUG ===');
+}
+
+function verifyArrayIntegrity() {
+    console.log('=== ARRAY INTEGRITY CHECK ===');
+
+    // Check for duplicate IDs
+    const ids = videoLibrary.map(v => v.id);
+    const uniqueIds = [...new Set(ids)];
+
+    if (ids.length !== uniqueIds.length) {
+        console.error('❌ DUPLICATE IDs FOUND!');
+        console.error('All IDs:', ids);
+        console.error('Unique IDs:', uniqueIds);
+
+        // Find duplicates
+        const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+        console.error('Duplicate IDs:', duplicates);
+    } else {
+        console.log('✅ All video IDs are unique');
+    }
+
+    // Check for object reference sharing
+    const objectHashes = videoLibrary.map((v, i) => {
+        return `${i}: ${v.title} (${v.id}) - ${JSON.stringify(v).substring(0, 50)}...`;
+    });
+
+    console.log('Video objects:', objectHashes);
+    console.log('=== END INTEGRITY CHECK ===');
 }
 
 function addVideo() {
@@ -314,8 +399,9 @@ function addVideo() {
         videoTitle = value;
     }
 
+    // Create a completely new video object with unique ID
     const newVideo = {
-        id: Date.now(),
+        id: Date.now() + Math.floor(Math.random() * 1000), // Ensure unique ID
         title: videoTitle,
         duration: "Unknown",
         type: videoUrl.split('.').pop().toUpperCase(),
@@ -324,10 +410,13 @@ function addVideo() {
         subtitles: null
     };
 
-    videoLibrary.push(newVideo);
+    // Add to array using spread operator to avoid reference issues
+    videoLibrary = [...videoLibrary, newVideo];
+
     input.value = '';
     loadLibrary();
     updateVideoCount();
+    verifyArrayIntegrity(); // Debug check
     console.log('New video added:', newVideo.title);
 }
 
@@ -347,16 +436,34 @@ function setupContextMenu() {
 }
 
 function startHold(videoId, event) {
-    if (isMoveMode || isContextMenuOpen) return;
+    console.log('=== START HOLD DEBUG ===');
+    console.log('Raw videoId parameter:', videoId, typeof videoId);
+
+    if (isMoveMode || isContextMenuOpen) {
+        console.log('❌ Already in move mode or context menu open');
+        return;
+    }
 
     event.preventDefault();
     isHolding = true;
-    selectedVideoId = videoId;
+
+    // Ensure we have the correct video ID as a number
+    selectedVideoId = parseInt(videoId);
+    console.log('selectedVideoId set to:', selectedVideoId, typeof selectedVideoId);
+
+    // Verify the video exists
+    const video = videoLibrary.find(v => v.id === selectedVideoId);
+    if (video) {
+        console.log(`✅ Video found: ${video.title}`);
+    } else {
+        console.error('❌ Video not found in library!');
+        console.error('Available IDs:', videoLibrary.map(v => v.id));
+    }
 
     holdTimeout = setTimeout(() => {
         if (isHolding) {
-            console.log('Showing context menu for video ID:', videoId);
-            showContextMenu(videoId, event);
+            console.log('✅ Showing context menu for video ID:', selectedVideoId);
+            showContextMenu(selectedVideoId, event);
         }
     }, 500);
 }
@@ -430,6 +537,7 @@ function hideContextMenu() {
     });
 
     isContextMenuOpen = false;
+    selectedVideoId = null;
     console.log('Context menu hidden');
 }
 
@@ -512,14 +620,24 @@ function enterMoveMode() {
         return;
     }
 
+    // Double-check the video exists in the library
+    const videoExists = videoLibrary.some(v => v.id === selectedVideoId);
+    if (!videoExists) {
+        console.error('Selected video ID not found in library:', selectedVideoId);
+        selectedVideoId = null;
+        return;
+    }
+
     isMoveMode = true;
     const selectedCard = document.querySelector(`[data-video-id="${selectedVideoId}"]`);
+
     if (selectedCard) {
         selectedCard.classList.add('moving');
         updateMoveIndicators();
         console.log('Move mode entered for video ID:', selectedVideoId);
+        console.log('Video title:', videoLibrary.find(v => v.id === selectedVideoId)?.title);
     } else {
-        console.error('Selected video card not found');
+        console.error('Selected video card not found for ID:', selectedVideoId);
         exitMoveMode();
         return;
     }
@@ -531,18 +649,30 @@ function enterMoveMode() {
 function exitMoveMode() {
     if (!isMoveMode) return;
 
+    console.log('Exiting move mode for video ID:', selectedVideoId);
+
     isMoveMode = false;
+
+    // Remove visual indicators
     document.querySelectorAll('.video-card').forEach(card => {
         card.classList.remove('moving');
+        // Reset any transform styles from animations
+        card.style.transform = '';
+        card.style.transition = '';
     });
+
     document.querySelectorAll('.move-indicator').forEach(indicator => {
         indicator.classList.remove('active');
     });
 
+    // Remove event listeners
     document.removeEventListener('click', handleMoveClick);
     document.removeEventListener('keydown', handleMoveKeyboard);
+
     console.log('Move mode exited');
-    selectedVideoId = null;
+
+    // IMPORTANT: Don't clear selectedVideoId here if we want to preserve selection
+    // selectedVideoId = null; // Remove this line to keep selection
 }
 
 function updateMoveIndicators() {
@@ -567,22 +697,107 @@ function updateMoveIndicators() {
 
 function moveLeft(targetIndex, event) {
     event.stopPropagation();
-    if (!isMoveMode || !selectedVideoId) return;
+    event.preventDefault();
+
+    console.log('=== MOVE LEFT WITH DUAL METHOD ===');
+
+    if (!isMoveMode || !selectedVideoId) {
+        console.log('❌ Not in move mode or no video selected');
+        return;
+    }
 
     const currentIndex = videoLibrary.findIndex(v => v.id === selectedVideoId);
-    if (currentIndex <= 0) return;
+    if (currentIndex <= 0) {
+        console.log('❌ Already at leftmost position');
+        return;
+    }
 
-    moveVideoToPosition(currentIndex, targetIndex);
+    const targetIdx = currentIndex - 1;
+    console.log(`Moving from ${currentIndex} to ${targetIdx}`);
+
+    // Try DOM method first
+    moveVideoToPosition(currentIndex, targetIdx);
+
+    // If that doesn't work, try fallback after a delay
+    setTimeout(() => {
+        const checkIndex = videoLibrary.findIndex(v => v.id === selectedVideoId);
+        if (checkIndex === currentIndex) {
+            console.log('🔄 DOM method failed, trying fallback...');
+            moveVideoToPositionFallback(currentIndex, targetIdx);
+        }
+    }, 600);
 }
 
 function moveRight(targetIndex, event) {
     event.stopPropagation();
-    if (!isMoveMode || !selectedVideoId) return;
+    event.preventDefault();
+
+    console.log('=== MOVE RIGHT WITH DUAL METHOD ===');
+
+    if (!isMoveMode || !selectedVideoId) {
+        console.log('❌ Not in move mode or no video selected');
+        return;
+    }
 
     const currentIndex = videoLibrary.findIndex(v => v.id === selectedVideoId);
-    if (currentIndex >= videoLibrary.length - 1) return;
+    if (currentIndex >= videoLibrary.length - 1) {
+        console.log('❌ Already at rightmost position');
+        return;
+    }
 
-    moveVideoToPosition(currentIndex, targetIndex + 1);
+    const targetIdx = currentIndex + 1;
+    console.log(`Moving from ${currentIndex} to ${targetIdx}`);
+
+    // Try DOM method first
+    moveVideoToPosition(currentIndex, targetIdx);
+
+    // If that doesn't work, try fallback after a delay
+    setTimeout(() => {
+        const checkIndex = videoLibrary.findIndex(v => v.id === selectedVideoId);
+        if (checkIndex === currentIndex) {
+            console.log('🔄 DOM method failed, trying fallback...');
+            moveVideoToPositionFallback(currentIndex, targetIdx);
+        }
+    }, 600);
+}
+
+function testArraySwapping() {
+    console.log('=== TESTING ARRAY SWAPPING ===');
+
+    // Create a simple test array
+    const testArray = [
+        { id: 1, title: 'Video A' },
+        { id: 2, title: 'Video B' },
+        { id: 3, title: 'Video C' },
+        { id: 4, title: 'Video D' }
+    ];
+
+    console.log('Original:', testArray.map((v, i) => `${i}: ${v.title}`));
+
+    // Test moving index 1 (Video B) to index 2
+    const fromIndex = 1;
+    const toIndex = 2;
+
+    const movingItem = testArray[fromIndex];
+    const newArray = [];
+
+    // Apply the same logic as our moveVideoToPosition
+    if (fromIndex < toIndex) {
+        for (let i = 0; i < fromIndex; i++) {
+            newArray.push(testArray[i]);
+        }
+        for (let i = fromIndex + 1; i <= toIndex; i++) {
+            newArray.push(testArray[i]);
+        }
+        newArray.push(movingItem);
+        for (let i = toIndex + 1; i < testArray.length; i++) {
+            newArray.push(testArray[i]);
+        }
+    }
+
+    console.log('After move 1→2:', newArray.map((v, i) => `${i}: ${v.title}`));
+    console.log('Expected: 0: Video A, 1: Video C, 2: Video B, 3: Video D');
+    console.log('=== TEST COMPLETE ===');
 }
 
 function handleMoveClick(event) {
@@ -595,46 +810,361 @@ function handleMoveClick(event) {
 }
 
 function handleMoveKeyboard(event) {
-    if (event.key === 'ArrowLeft') {
+    if (!isMoveMode || isContextMenuOpen) return;
+
+    console.log('🎹 Keyboard move:', event.key);
+
+    const currentIndex = videoLibrary.findIndex(v => v.id === selectedVideoId);
+    console.log(`Current position: ${currentIndex}`);
+
+    if (event.key === 'ArrowLeft' && currentIndex > 0) {
         event.preventDefault();
-        const currentIndex = videoLibrary.findIndex(v => v.id === selectedVideoId);
-        if (currentIndex > 0) {
-            console.log('Moving video left from index:', currentIndex);
-            moveVideoToPosition(currentIndex, currentIndex - 1);
-        }
-    } else if (event.key === 'ArrowRight') {
+        event.stopPropagation();
+        console.log('⬅️ Moving left');
+        moveLeft(currentIndex - 1, event);
+    } else if (event.key === 'ArrowRight' && currentIndex < videoLibrary.length - 1) {
         event.preventDefault();
-        const currentIndex = videoLibrary.findIndex(v => v.id === selectedVideoId);
-        if (currentIndex < videoLibrary.length - 1) {
-            console.log('Moving video right from index:', currentIndex);
-            moveVideoToPosition(currentIndex, currentIndex + 1);
-        }
-    } else if (event.key === 'Enter' || event.key === 'Escape') {
-        console.log('Exiting move mode via keyboard');
+        event.stopPropagation();
+        console.log('➡️ Moving right');
+        moveRight(currentIndex + 1, event);
+    } else if (event.key === 'Escape') {
         exitMoveMode();
+    } else if (event.key === 't') {
+        // Test key
+        testBothMethods();
     }
 }
 
+function verifyMoveWorking() {
+    console.log('=== TESTING BASIC MOVE FUNCTIONALITY ===');
+
+    // Create a simple test
+    const originalLength = videoLibrary.length;
+    const originalFirstVideo = videoLibrary[0];
+    const originalSecondVideo = videoLibrary[1];
+
+    console.log(`Original first video: ${originalFirstVideo.title} (ID: ${originalFirstVideo.id})`);
+    console.log(`Original second video: ${originalSecondVideo.title} (ID: ${originalSecondVideo.id})`);
+
+    // Manually test the splice operations
+    console.log('Testing manual splice...');
+    const testArray = [...videoLibrary];
+    const itemToMove = testArray[0];
+    testArray.splice(0, 1); // Remove first item
+    testArray.splice(1, 0, itemToMove); // Insert at position 1
+
+    console.log('After manual splice:');
+    console.log(`New first video: ${testArray[0].title} (ID: ${testArray[0].id})`);
+    console.log(`New second video: ${testArray[1].title} (ID: ${testArray[1].id})`);
+
+    if (testArray[1].id === originalFirstVideo.id) {
+        console.log('✅ Manual splice works correctly');
+    } else {
+        console.log('❌ Manual splice failed');
+    }
+}
+
+function enterMoveMode() {
+    console.log('=== ENTERING MOVE MODE ===');
+    console.log('selectedVideoId:', selectedVideoId);
+
+    if (!selectedVideoId) {
+        console.error('❌ No video selected for move mode');
+        return;
+    }
+
+    // Find the video in the library
+    const videoIndex = videoLibrary.findIndex(v => v.id === selectedVideoId);
+    const video = videoLibrary[videoIndex];
+
+    if (videoIndex === -1 || !video) {
+        console.error('❌ Selected video not found in library');
+        console.error('Available video IDs:', videoLibrary.map(v => v.id));
+        return;
+    }
+
+    console.log(`✅ Found video: ${video.title} at index ${videoIndex}`);
+
+    isMoveMode = true;
+    const selectedCard = document.querySelector(`[data-video-id="${selectedVideoId}"]`);
+
+    if (selectedCard) {
+        selectedCard.classList.add('moving');
+        updateMoveIndicators();
+        console.log('✅ Move mode activated successfully');
+
+        // Run verification test
+        verifyMoveWorking();
+    } else {
+        console.error('❌ Could not find card element for selected video');
+        exitMoveMode();
+        return;
+    }
+
+    document.addEventListener('click', handleMoveClick);
+    document.addEventListener('keydown', handleMoveKeyboard);
+
+    console.log('✅ Event listeners added for move mode');
+}
+
 function moveVideoToPosition(fromIndex, toIndex) {
-    console.log('Moving video from index', fromIndex, 'to', toIndex);
+    console.log('=== MOVE WITH DIRECT DOM MANIPULATION ===');
+    console.log(`Moving from index ${fromIndex} to index ${toIndex}`);
+    console.log('Selected video ID:', selectedVideoId);
 
+    // Ensure valid indices
     toIndex = Math.max(0, Math.min(toIndex, videoLibrary.length - 1));
+    if (fromIndex === toIndex) {
+        console.log('Same position, no move needed');
+        return;
+    }
 
-    if (fromIndex === toIndex) return;
+    // Store original array state for comparison
+    const originalArray = videoLibrary.map(v => ({ id: v.id, title: v.title }));
+    console.log('Original array:', originalArray.map((v, i) => `${i}: ${v.title} (${v.id})`));
 
-    const video = videoLibrary.splice(fromIndex, 1)[0];
-    videoLibrary.splice(toIndex, 0, video);
+    // Get the video being moved
+    const movingVideo = videoLibrary[fromIndex];
+    console.log(`Moving video: ${movingVideo.title} (ID: ${movingVideo.id})`);
 
-    loadLibrary();
+    // *** METHOD 1: Direct DOM manipulation first ***
+    const grid = document.getElementById('videoGrid');
+    const cards = Array.from(grid.children);
+    const movingCard = cards[fromIndex];
+    const targetCard = cards[toIndex];
+
+    if (movingCard && targetCard) {
+        console.log('🎬 Performing visual animation...');
+
+        // Animate the moving card
+        const direction = toIndex > fromIndex ? 'right' : 'left';
+        const distance = Math.abs(toIndex - fromIndex);
+
+        movingCard.style.transition = 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        if (direction === 'right') {
+            movingCard.style.transform = `translateX(${distance * 100}%) scale(1.05)`;
+        } else {
+            movingCard.style.transform = `translateX(-${distance * 100}%) scale(1.05)`;
+        }
+
+        // Wait for animation to complete, then directly move DOM elements
+        setTimeout(() => {
+            console.log('🔧 Directly manipulating DOM...');
+
+            // Remove the moving card from DOM
+            movingCard.remove();
+
+            // Insert it at the new position
+            if (toIndex >= cards.length - 1) {
+                // Insert at the end
+                grid.appendChild(movingCard);
+            } else {
+                // Insert before the target position
+                const referenceCard = cards[toIndex];
+                if (fromIndex < toIndex) {
+                    // Moving right: insert after the target
+                    grid.insertBefore(movingCard, referenceCard.nextSibling);
+                } else {
+                    // Moving left: insert before the target
+                    grid.insertBefore(movingCard, referenceCard);
+                }
+            }
+
+            // Reset transform
+            movingCard.style.transform = '';
+            movingCard.style.transition = '';
+
+            // Now update the data array to match the DOM
+            console.log('📊 Updating data array...');
+
+            // Create new array in the correct order by reading DOM
+            const newVideoLibrary = [];
+            const updatedCards = Array.from(grid.children);
+
+            updatedCards.forEach((card, index) => {
+                const videoId = parseInt(card.dataset.videoId);
+                const video = videoLibrary.find(v => v.id === videoId);
+                if (video) {
+                    newVideoLibrary.push(video);
+                    // Update the card's data-index
+                    card.dataset.index = index;
+                }
+            });
+
+            // Replace the global array
+            videoLibrary.length = 0;
+            videoLibrary.push(...newVideoLibrary);
+
+            // Verify the change
+            const newArray = videoLibrary.map(v => ({ id: v.id, title: v.title }));
+            console.log('New array:', newArray.map((v, i) => `${i}: ${v.title} (${v.id})`));
+
+            // Check if actually changed
+            const arrayChanged = JSON.stringify(originalArray) !== JSON.stringify(newArray);
+            console.log(arrayChanged ? '✅ Array successfully changed' : '❌ Array did not change');
+
+            // Update move indicators
+            updateMoveIndicators();
+
+            // Restore move mode
+            setTimeout(() => {
+                if (selectedVideoId) {
+                    const selectedCard = document.querySelector(`[data-video-id="${selectedVideoId}"]`);
+                    if (selectedCard) {
+                        selectedCard.classList.add('moving');
+                        console.log(`✅ Move mode restored for video ID ${selectedVideoId}`);
+                    }
+                }
+            }, 50);
+
+        }, 400); // Wait for animation
+    } else {
+        console.error('❌ Could not find cards for DOM manipulation');
+    }
+}
+
+function moveVideoToPositionFallback(fromIndex, toIndex) {
+    console.log('=== FALLBACK ARRAY METHOD ===');
+
+    // Force clear any cached references
+    window.videoLibraryCache = null;
+
+    // Create completely new array
+    const newArray = [];
+
+    // Copy all videos to new array
+    for (let i = 0; i < videoLibrary.length; i++) {
+        newArray.push({
+            id: videoLibrary[i].id,
+            title: videoLibrary[i].title,
+            duration: videoLibrary[i].duration,
+            type: videoLibrary[i].type,
+            url: videoLibrary[i].url,
+            thumbnail: videoLibrary[i].thumbnail,
+            subtitles: videoLibrary[i].subtitles ? [...videoLibrary[i].subtitles] : null
+        });
+    }
+
+    // Perform the move on new array
+    const itemToMove = newArray.splice(fromIndex, 1)[0];
+    newArray.splice(toIndex, 0, itemToMove);
+
+    // Replace global array completely
+    videoLibrary.splice(0, videoLibrary.length, ...newArray);
+
+    console.log('Fallback array after move:');
+    videoLibrary.forEach((v, i) => console.log(`  ${i}: ${v.title} (${v.id})`));
+
+    // Force reload UI
+    setTimeout(() => {
+        loadLibrary();
+
+        setTimeout(() => {
+            if (selectedVideoId) {
+                const selectedCard = document.querySelector(`[data-video-id="${selectedVideoId}"]`);
+                if (selectedCard) {
+                    selectedCard.classList.add('moving');
+                    updateMoveIndicators();
+                }
+            }
+        }, 50);
+    }, 100);
+}
+
+function testBothMethods() {
+    console.log('=== TESTING BOTH MOVE METHODS ===');
+
+    if (videoLibrary.length < 3) {
+        console.log('Need at least 3 videos to test');
+        return;
+    }
+
+    const originalOrder = videoLibrary.map(v => v.id);
+    console.log('Original order:', originalOrder);
+
+    // Test method 1: Direct DOM manipulation
+    console.log('Testing direct DOM method...');
+    moveVideoToPosition(0, 1);
 
     setTimeout(() => {
-        const newCard = document.querySelector(`[data-video-id="${selectedVideoId}"]`);
-        if (newCard) {
-            newCard.classList.add('moving');
-            updateMoveIndicators();
-            console.log('Video moved, new library order:', videoLibrary.map(v => v.title));
+        const afterMethod1 = videoLibrary.map(v => v.id);
+        console.log('After DOM method:', afterMethod1);
+
+        // Test method 2: Array manipulation
+        console.log('Testing fallback array method...');
+        moveVideoToPositionFallback(1, 0);
+
+        setTimeout(() => {
+            const afterMethod2 = videoLibrary.map(v => v.id);
+            console.log('After array method:', afterMethod2);
+
+            if (JSON.stringify(afterMethod2) === JSON.stringify(originalOrder)) {
+                console.log('✅ Both methods work - back to original order');
+            } else {
+                console.log('❌ Methods have issues');
+            }
+        }, 500);
+    }, 500);
+}
+
+function forceRefreshGrid() {
+    console.log('🔄 FORCE REFRESHING GRID');
+
+    // Clear the grid completely
+    const grid = document.getElementById('videoGrid');
+    const originalHTML = grid.innerHTML;
+
+    grid.innerHTML = '';
+
+    // Force a reflow
+    grid.offsetHeight;
+
+    // Reload the library
+    loadLibrary();
+
+    // Force another reflow
+    grid.offsetHeight;
+
+    console.log('✅ Grid force refresh complete');
+}
+
+function debugArrayVsDOM() {
+    console.log('=== ARRAY VS DOM COMPARISON ===');
+
+    console.log('Array order:');
+    videoLibrary.forEach((video, index) => {
+        console.log(`  Array[${index}]: ${video.title} (ID: ${video.id})`);
+    });
+
+    console.log('DOM order:');
+    const cards = document.querySelectorAll('.video-card');
+    cards.forEach((card, index) => {
+        const videoId = card.dataset.videoId;
+        const title = card.dataset.title;
+        console.log(`  DOM[${index}]: ${title} (ID: ${videoId})`);
+    });
+
+    // Check for mismatches
+    let mismatches = 0;
+    cards.forEach((card, index) => {
+        const domVideoId = parseInt(card.dataset.videoId);
+        const arrayVideo = videoLibrary[index];
+
+        if (!arrayVideo || domVideoId !== arrayVideo.id) {
+            console.error(`❌ MISMATCH at index ${index}:`);
+            console.error(`  DOM: ID ${domVideoId}`);
+            console.error(`  Array: ID ${arrayVideo ? arrayVideo.id : 'undefined'}`);
+            mismatches++;
         }
-    }, 50);
+    });
+
+    if (mismatches === 0) {
+        console.log('✅ Array and DOM are in sync');
+    } else {
+        console.error(`❌ Found ${mismatches} mismatches between array and DOM`);
+    }
+
+    console.log('=== END COMPARISON ===');
 }
 
 // Delete Video and Notification System
@@ -1229,6 +1759,17 @@ function enableMiniPlayer() {
     }
 
     console.log('Enabling mini player for:', currentVideo.title);
+    const player = document.getElementById('mainVideoPlayer');
+    const wasPlaying = !player.paused;
+
+    // Store current state to prevent interruption
+    const playerState = {
+        currentTime: player.currentTime,
+        paused: player.paused,
+        volume: player.volume,
+        muted: player.muted
+    };
+
     isMiniPlayerMode = true;
     const miniPlayer = document.getElementById('miniPlayer');
     const miniArtwork = document.getElementById('miniArtwork');
@@ -1247,11 +1788,20 @@ function enableMiniPlayer() {
     document.getElementById('mainPage').classList.add('with-mini-player');
     miniPlayer.classList.add('show');
 
-    const player = document.getElementById('mainVideoPlayer');
-    if (!player.paused) {
-        miniArtwork.classList.add('spinning');
-        document.getElementById('miniPlayBtn').innerHTML = '<span class="material-icons">pause</span>';
-    }
+    // Restore state without interruption
+    setTimeout(() => {
+        player.currentTime = playerState.currentTime;
+        player.volume = playerState.volume;
+        player.muted = playerState.muted;
+
+        if (wasPlaying) {
+            miniArtwork.classList.add('spinning');
+            document.getElementById('miniPlayBtn').innerHTML = '<span class="material-icons">pause</span>';
+        }
+
+        // Drag is already setup globally, no need to call setupMiniPlayerDrag again
+        console.log('Mini player enabled - drag system ready');
+    }, 50);
 
     updateMiniPlayerProgress();
     startMiniPlayerUpdates();
@@ -1339,19 +1889,68 @@ function expandMiniPlayer() {
 
     console.log('Expanding mini player to full player');
     const player = document.getElementById('mainVideoPlayer');
-    const wasPlaying = !player.paused;
 
+    // Store current state to prevent interruption
+    const playerState = {
+        currentTime: player.currentTime,
+        paused: player.paused,
+        volume: player.volume,
+        muted: player.muted,
+        src: player.src
+    };
+
+    // Hide mini player and show full player
     document.getElementById('miniPlayer').classList.remove('show');
     document.getElementById('mainPage').classList.remove('with-mini-player');
+    document.getElementById('mainPage').style.display = 'none';
     document.getElementById('playerPage').style.display = 'block';
 
-    playVideo(currentVideo.id);
-    if (wasPlaying) {
-        player.play();
+    // Set up the player page
+    document.getElementById('currentVideoTitle').textContent = currentVideo.title;
+    const playerContainer = document.getElementById('playerContainer');
+    if (currentVideo.thumbnail) {
+        playerContainer.style.backgroundImage = `url(${currentVideo.thumbnail})`;
+    } else {
+        playerContainer.style.backgroundImage = 'none';
+    }
+
+    // Ensure the video source is correct and restore state
+    if (player.src !== playerState.src) {
+        player.src = playerState.src;
+        player.load();
+
+        player.addEventListener('loadedmetadata', function restoreState() {
+            player.currentTime = playerState.currentTime;
+            player.volume = playerState.volume;
+            player.muted = playerState.muted;
+
+            if (!playerState.paused) {
+                player.play();
+            }
+
+            updateVolumeIcon();
+            player.removeEventListener('loadedmetadata', restoreState);
+        }, { once: true });
+    } else {
+        // If source is the same, just restore state
+        setTimeout(() => {
+            player.currentTime = playerState.currentTime;
+            player.volume = playerState.volume;
+            player.muted = playerState.muted;
+
+            if (!playerState.paused) {
+                player.play();
+            }
+
+            updateVolumeIcon();
+        }, 50);
     }
 
     stopMiniPlayerUpdates();
+    hideDragBlurOverlay(); // Ensure drag overlay is hidden
     isMiniPlayerMode = false;
+
+    console.log('Mini player expanded successfully');
 }
 
 function toggleMiniPlay() {
@@ -1653,21 +2252,29 @@ function showMiniPlayerEffect(mode) {
     const effect = document.getElementById('miniPlayerEffect');
     const miniPlayer = document.getElementById('miniPlayer');
 
-    if (!effect) {
-        console.error('Mini player effect element not found');
+    if (!effect || !miniPlayer) {
+        console.error('Mini player effect elements not found');
         return;
     }
 
-    if (!miniPlayer) {
-        console.error('Mini player element not found');
+    // Prevent overlapping animations
+    if (animationLocked) {
+        console.log('Animation already in progress, skipping');
         return;
     }
 
     console.log(`Showing mini player effect: ${mode}`);
+    animationLocked = true;
 
+    // Clear any existing classes and reset
     effect.className = 'mini-player-effect';
-    effect.classList.add(mode);
+    effect.style.opacity = '0';
+
+    // Force reflow
     effect.offsetHeight;
+
+    // Add the specific mode class
+    effect.classList.add(mode);
     effect.style.opacity = '1';
 
     miniPlayer.style.transform = 'translateY(-8px) scale(1.1)';
@@ -1675,13 +2282,291 @@ function showMiniPlayerEffect(mode) {
 
     createCornerIndicator(mode);
 
+    // Lock the animation for full duration
     setTimeout(() => {
         effect.style.opacity = '0';
         miniPlayer.style.transform = '';
         miniPlayer.style.transition = '';
         removeCornerIndicator();
+
+        // Unlock after complete fade out
+        setTimeout(() => {
+            animationLocked = false;
+        }, 500);
     }, 2000);
 }
+
+// mini player drag feature functions @@@@
+function createDragBlurOverlay() {
+    if (!dragBlurOverlay) {
+        dragBlurOverlay = document.createElement('div');
+        dragBlurOverlay.id = 'dragBlurOverlay';
+        dragBlurOverlay.style.cssText = `
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(15px);
+            z-index: 1400;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        `;
+        document.body.appendChild(dragBlurOverlay);
+    }
+    return dragBlurOverlay;
+}
+
+function showDragBlurOverlay() {
+    const overlay = createDragBlurOverlay();
+    overlay.style.opacity = '1';
+    overlay.style.pointerEvents = 'all';
+}
+
+function hideDragBlurOverlay() {
+    if (dragBlurOverlay) {
+        dragBlurOverlay.style.opacity = '0';
+        dragBlurOverlay.style.pointerEvents = 'none';
+    }
+}
+
+// function setupMiniPlayerDrag() {
+//     const miniPlayer = document.getElementById('miniPlayer');
+//     if (!miniPlayer) return;
+
+//     // Remove existing listeners to prevent duplicates
+//     miniPlayer.removeEventListener('mousedown', startMiniPlayerHold);
+//     miniPlayer.removeEventListener('touchstart', startMiniPlayerHold);
+//     document.removeEventListener('mouseup', endMiniPlayerHold);
+//     document.removeEventListener('touchend', endMiniPlayerHold);
+//     document.removeEventListener('mousemove', dragMiniPlayer);
+//     document.removeEventListener('touchmove', dragMiniPlayer);
+
+//     // Add fresh listeners
+//     miniPlayer.addEventListener('mousedown', startMiniPlayerHold, { passive: false });
+//     miniPlayer.addEventListener('touchstart', startMiniPlayerHold, { passive: false });
+//     document.addEventListener('mouseup', endMiniPlayerHold, { passive: false });
+//     document.addEventListener('touchend', endMiniPlayerHold, { passive: false });
+//     document.addEventListener('mousemove', dragMiniPlayer, { passive: false });
+//     document.addEventListener('touchmove', dragMiniPlayer, { passive: false });
+
+//     console.log('Mini player drag setup completed');
+// }
+
+function setupMiniPlayerDrag() {
+    console.log('Setting up mini player drag handlers...');
+
+    // Use event delegation instead of direct element binding
+    // This ensures it works even if mini player is created later
+
+    // Remove any existing delegation handlers first
+    document.removeEventListener('mousedown', handleMiniPlayerMouseDown);
+    document.removeEventListener('touchstart', handleMiniPlayerTouchStart);
+    document.removeEventListener('mouseup', endMiniPlayerHold);
+    document.removeEventListener('touchend', endMiniPlayerHold);
+    document.removeEventListener('mousemove', dragMiniPlayer);
+    document.removeEventListener('touchmove', dragMiniPlayer);
+
+    // Add new delegation handlers
+    document.addEventListener('mousedown', handleMiniPlayerMouseDown, { passive: false });
+    document.addEventListener('touchstart', handleMiniPlayerTouchStart, { passive: false });
+    document.addEventListener('mouseup', endMiniPlayerHold, { passive: false });
+    document.addEventListener('touchend', endMiniPlayerHold, { passive: false });
+    document.addEventListener('mousemove', dragMiniPlayer, { passive: false });
+    document.addEventListener('touchmove', dragMiniPlayer, { passive: false });
+
+    console.log('Mini player drag handlers setup complete');
+}
+
+function handleMiniPlayerMouseDown(event) {
+    // Check if the event target is within mini player
+    const miniPlayer = event.target.closest('#miniPlayer');
+    if (!miniPlayer) return;
+
+    // Call the original start function
+    startMiniPlayerHold(event);
+}
+
+function handleMiniPlayerTouchStart(event) {
+    // Check if the event target is within mini player
+    const miniPlayer = event.target.closest('#miniPlayer');
+    if (!miniPlayer) return;
+
+    // Call the original start function
+    startMiniPlayerHold(event);
+}
+
+
+function startMiniPlayerHold(event) {
+    const miniPlayer = document.getElementById('miniPlayer');
+    if (!miniPlayer || !miniPlayer.classList.contains('show')) {
+        return; // Exit if mini player doesn't exist or isn't visible
+    }
+
+    // Don't start drag on control buttons or artwork
+    if (event.target.closest('.mini-control-btn') ||
+        event.target.closest('.mini-close-btn') ||
+        event.target.closest('.mini-artwork')) {
+        return;
+    }
+
+    // Prevent default to avoid text selection and other conflicts
+    event.preventDefault();
+    event.stopPropagation();
+
+    const now = Date.now();
+    // Prevent multiple rapid touches
+    if (now - lastTouchTime < 100) return;
+    lastTouchTime = now;
+
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    miniPlayerStartX = clientX;
+    miniPlayerStartY = clientY;
+    isDragging = false;
+    dragStarted = false;
+
+    console.log('Hold started at:', { x: clientX, y: clientY });
+
+    // Clear any existing timeout
+    if (miniPlayerHoldTimeout) {
+        clearTimeout(miniPlayerHoldTimeout);
+    }
+
+    miniPlayerHoldTimeout = setTimeout(() => {
+        // Double-check mini player still exists and is visible
+        const currentMiniPlayer = document.getElementById('miniPlayer');
+        if (!currentMiniPlayer || !currentMiniPlayer.classList.contains('show')) {
+            return;
+        }
+
+        if (!dragStarted) {
+            miniPlayerDragMode = true;
+            dragStarted = true;
+
+            console.log('Drag mode activated');
+
+            // Show visual feedback
+            showDragBlurOverlay();
+            currentMiniPlayer.classList.add('dragging');
+            currentMiniPlayer.style.transition = 'none';
+            currentMiniPlayer.style.zIndex = '1500';
+
+            showActionFeedback('open_with', 'Drag to reposition');
+        }
+    }, 500);
+}
+
+function dragMiniPlayer(event) {
+    if (!miniPlayerDragMode || !dragStarted) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+    // Mark that we're actively dragging
+    isDragging = true;
+
+    const deltaX = clientX - miniPlayerStartX;
+    const deltaY = clientY - miniPlayerStartY;
+
+    const miniPlayer = document.getElementById('miniPlayer');
+    const currentStyle = window.getComputedStyle(miniPlayer);
+
+    // Get current position, handling both left/right and top/bottom positioning
+    let currentLeft = miniPlayer.offsetLeft;
+    let currentTop = miniPlayer.offsetTop;
+
+    // Calculate new position
+    const newX = currentLeft + deltaX;
+    const newY = currentTop + deltaY;
+
+    // Constrain to viewport
+    const maxX = window.innerWidth - miniPlayer.offsetWidth - 20;
+    const maxY = window.innerHeight - miniPlayer.offsetHeight - 20;
+
+    const constrainedX = Math.max(20, Math.min(maxX, newX));
+    const constrainedY = Math.max(20, Math.min(maxY, newY));
+
+    // Apply position
+    miniPlayer.style.left = constrainedX + 'px';
+    miniPlayer.style.top = constrainedY + 'px';
+    miniPlayer.style.right = 'auto';
+    miniPlayer.style.bottom = 'auto';
+
+    // Update start position for next movement
+    miniPlayerStartX = clientX;
+    miniPlayerStartY = clientY;
+
+    console.log('Dragging to:', { x: constrainedX, y: constrainedY });
+}
+
+function endMiniPlayerHold(event) {
+    // Clear timeout
+    if (miniPlayerHoldTimeout) {
+        clearTimeout(miniPlayerHoldTimeout);
+        miniPlayerHoldTimeout = null;
+    }
+
+    if (miniPlayerDragMode && dragStarted) {
+        console.log('Ending drag mode');
+
+        const miniPlayer = document.getElementById('miniPlayer');
+
+        // Get final position
+        const rect = miniPlayer.getBoundingClientRect();
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const playerWidth = rect.width;
+        const playerHeight = rect.height;
+
+        // Determine final position - snap to sides
+        let finalX, finalY;
+        const centerX = rect.left + playerWidth / 2;
+
+        if (centerX < windowWidth / 2) {
+            // Snap to left
+            finalX = 20;
+        } else {
+            // Snap to right
+            finalX = windowWidth - playerWidth - 20;
+        }
+
+        // Keep Y position but ensure it's within bounds
+        finalY = Math.max(20, Math.min(windowHeight - playerHeight - 20, rect.top));
+
+        // Apply final position with smooth transition
+        miniPlayer.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        miniPlayer.style.left = finalX + 'px';
+        miniPlayer.style.top = finalY + 'px';
+        miniPlayer.style.right = 'auto';
+        miniPlayer.style.bottom = 'auto';
+
+        // Reset drag state and visual effects
+        setTimeout(() => {
+            miniPlayer.classList.remove('dragging');
+            miniPlayer.style.zIndex = '';
+            hideDragBlurOverlay();
+
+            // Reset all drag state
+            miniPlayerDragMode = false;
+            isDragging = false;
+            dragStarted = false;
+
+            console.log('Drag completed, final position:', { x: finalX, y: finalY });
+            showActionFeedback('check', 'Position saved');
+        }, 100);
+    } else {
+        // Reset state even if drag didn't activate
+        miniPlayerDragMode = false;
+        isDragging = false;
+        dragStarted = false;
+    }
+}
+
+// end drag mode @@@
 
 function createCornerIndicator(mode) {
     removeCornerIndicator();
@@ -1742,53 +2627,81 @@ function setupKeyboardShortcuts() {
         if (e.target.tagName === 'INPUT') return;
 
         const player = document.getElementById('mainVideoPlayer');
+        const playerPageVisible = document.getElementById('playerPage').style.display !== 'none';
 
+        // Handle move mode keys separately and prevent conflicts
+        if (isMoveMode) {
+            handleMoveKeyboard(e);
+            return;
+        }
+
+        // Handle P key globally - works from both mini player and full player
+        if (e.key.toLowerCase() === 'p') {
+            e.preventDefault();
+            handlePKeyToggle();
+            return; // Exit early to prevent other processing
+        }
+
+        // Only handle video control keys when video player is visible and NOT in move mode
+        if (playerPageVisible && !isMoveMode && !isContextMenuOpen) {
+            switch(e.key.toLowerCase()) {
+                case ' ':
+                    e.preventDefault();
+                    togglePlayPause();
+                    break;
+                case 'arrowleft':
+                    e.preventDefault();
+                    skip(-10);
+                    break;
+                case 'arrowright':
+                    e.preventDefault();
+                    skip(10);
+                    break;
+                case 'arrowup':
+                    e.preventDefault();
+                    player.volume = Math.min(player.volume + 0.05, 1);
+                    updateVolumeIcon();
+                    showActionFeedback('volume_up', `Volume: ${Math.round(player.volume * 100)}%`);
+                    break;
+                case 'arrowdown':
+                    e.preventDefault();
+                    player.volume = Math.max(player.volume - 0.05, 0);
+                    updateVolumeIcon();
+                    showActionFeedback('volume_down', `Volume: ${Math.round(player.volume * 100)}%`);
+                    break;
+                case 'm':
+                    e.preventDefault();
+                    toggleMute();
+                    break;
+                case 'f':
+                    toggleFullscreen();
+                    break;
+                case 's':
+                    toggleSubtitleModal();
+                    break;
+                case 'l':
+                    togglePlaybackMode();
+                    break;
+            }
+        }
+
+        // Global shortcuts that work regardless of player state
         switch(e.key.toLowerCase()) {
-            case ' ':
-                e.preventDefault();
-                togglePlayPause();
-                break;
-            case 'arrowleft':
-                e.preventDefault();
-                skip(-10);
-                break;
-            case 'arrowright':
-                e.preventDefault();
-                skip(10);
-                break;
-            case 'arrowup':
-                e.preventDefault();
-                player.volume = Math.min(player.volume + 0.05, 1);
-                updateVolumeIcon();
-                showActionFeedback('volume_up', `Volume: ${Math.round(player.volume * 100)}%`);
-                break;
-            case 'arrowdown':
-                e.preventDefault();
-                player.volume = Math.max(player.volume - 0.05, 0);
-                updateVolumeIcon();
-                showActionFeedback('volume_down', `Volume: ${Math.round(player.volume * 100)}%`);
-                break;
-            case 'm':
-                e.preventDefault();
-                toggleMute();
-                break;
-            case 'f':
-                toggleFullscreen();
-                break;
-            case 's':
-                toggleSubtitleModal();
-                break;
-            case 'l':
-                togglePlaybackMode();
-                break;
             case 'c':
-                toggleCast();
+                e.preventDefault();
+                handleCastToggle();
                 break;
-            case 'p':
-                if (!isMiniPlayerMode) {
-                    enableMiniPlayer();
-                } else {
-                    expandMiniPlayer();
+            case 'escape':
+                if (isContextMenuOpen) {
+                    hideContextMenu();
+                } else if (isMoveMode) {
+                    exitMoveMode();
+                } else if (castModalVisible) {
+                    handleCastClose();
+                } else if (isMiniPlayerMode) {
+                    closeMiniPlayer();
+                } else if (playerPageVisible) {
+                    goBack();
                 }
                 break;
             case 'b':
@@ -1799,15 +2712,76 @@ function setupKeyboardShortcuts() {
                     }
                 }
                 break;
-            case 'escape':
-                if (isMiniPlayerMode) {
-                    closeMiniPlayer();
-                } else {
-                    goBack();
-                }
-                break;
         }
     });
+}
+
+function handlePKeyToggle() {
+    console.log('=== P KEY TOGGLE ===');
+    console.log('isMiniPlayerMode:', isMiniPlayerMode);
+    console.log('currentVideo:', currentVideo ? currentVideo.title : 'None');
+
+    const playerPageVisible = document.getElementById('playerPage').style.display !== 'none';
+    console.log('playerPageVisible:', playerPageVisible);
+
+    if (isMiniPlayerMode) {
+        // Currently in mini player mode - expand to full player
+        console.log('📱→🖥️ Expanding mini player to full player');
+        expandMiniPlayer();
+        showActionFeedback('open_in_full', 'Expanded to Full Player');
+    } else if (playerPageVisible && currentVideo) {
+        // Currently in full player mode - minimize to mini player
+        console.log('🖥️→📱 Minimizing to mini player');
+        enableMiniPlayer();
+        showActionFeedback('widgets', 'Minimized to Mini Player');
+    } else if (currentVideo) {
+        // Video exists but not in player mode - go to full player
+        console.log('📂→🖥️ Opening video in full player');
+        playVideo(currentVideo.id);
+        showActionFeedback('play_circle', 'Opened in Full Player');
+    } else {
+        // No video available
+        console.log('❌ No video available to toggle');
+        showActionFeedback('error', 'No video available');
+    }
+}
+
+function handleCastToggle() {
+    const castModal = document.getElementById('castModal');
+
+    if (castModal && castModal.classList.contains('show')) {
+        handleCastClose();
+    } else {
+        // Use the toggleCast function from cast-script.js
+        if (typeof toggleCast === 'function') {
+            toggleCast();
+            // Update our tracking variable
+            setTimeout(() => {
+                const modal = document.getElementById('castModal');
+                castModalVisible = modal && modal.classList.contains('show');
+            }, 100);
+        } else {
+            console.error('toggleCast function not found - ensure cast-script.js is loaded');
+        }
+    }
+}
+
+function handleCastClose() {
+    // Use the hideCastModal function from cast-script.js if available
+    if (typeof hideCastModal === 'function') {
+        hideCastModal();
+    } else {
+        // Fallback
+        const castModal = document.getElementById('castModal');
+        if (castModal) {
+            castModal.classList.remove('show');
+        }
+        const blurOverlay = document.getElementById('blurOverlay');
+        if (blurOverlay && !isContextMenuOpen) {
+            blurOverlay.classList.remove('active');
+        }
+    }
+    castModalVisible = false;
 }
 
 // Shortcuts Modal
@@ -1955,14 +2929,21 @@ function trackPerformance() {
 
 // Cast Modal Functions
 function hideCastModal() {
-    const modal = document.getElementById('castModal');
-    if (modal) {
-        modal.classList.remove('show');
+    // This will work with your existing cast-script.js
+    const castModal = document.getElementById('castModal');
+    const blurOverlay = document.getElementById('blurOverlay');
+
+    if (castModal) {
+        castModal.classList.remove('show');
     }
-    if (document.getElementById('blurOverlay')) {
-        document.getElementById('blurOverlay').classList.remove('active');
+    if (blurOverlay && !isContextMenuOpen) {
+        blurOverlay.classList.remove('active');
     }
+
+    castModalVisible = false;
+    console.log('Cast modal hidden');
 }
+
 
 // Debug Functions
 function debugPlaybackModes() {
@@ -2128,12 +3109,93 @@ document.addEventListener('DOMContentLoaded', function() {
     setupTouchGestures();
     setupDragAndDrop();
     updatePlaybackModeUI();
+    setupMiniPlayerDrag();
     setupPlaybackModeButton();
+    observeCastModal();
     initializePictureInPicture();
 
     document.getElementById('videoInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') addVideo();
     });
+
+    if (typeof initializeCasting === 'function') {
+        initializeCasting();
+    } else {
+        initializePictureInPicture();
+    }
+
+    initializeMiniPlayerDrag();
+
+    // Setup cast modal observer
+    observeCastModal();
+
+    const castModalObserver = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                const castModal = document.getElementById('castModal');
+                if (castModal) {
+                    castModalVisible = castModal.classList.contains('show');
+                }
+            }
+        });
+    });
+
+function initializeMiniPlayerDrag() {
+    console.log('Initializing mini player drag...');
+
+    // Simply setup drag immediately - no attempts needed
+    setupMiniPlayerDrag();
+
+    // Also setup a mutation observer to handle when mini player is dynamically created
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            mutation.addedNodes.forEach(function(node) {
+                if (node.nodeType === 1) { // Element node
+                    const miniPlayer = node.querySelector ? node.querySelector('#miniPlayer') :
+                                     (node.id === 'miniPlayer' ? node : null);
+                    if (miniPlayer) {
+                        setupMiniPlayerDrag();
+                        console.log('Mini player detected and drag setup applied');
+                    }
+                }
+            });
+        });
+    });
+
+    // Observe document body for dynamically added elements
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    console.log('Mini player drag initialization complete with dynamic detection');
+}
+
+    const checkForCastModal = setInterval(() => {
+        const castModal = document.getElementById('castModal');
+        if (castModal) {
+            castModalObserver.observe(castModal, { attributes: true });
+            clearInterval(checkForCastModal);
+        }
+    }, 100);
+
+    const observeCastModal = () => {
+        const checkForCastModal = setInterval(() => {
+            const castModal = document.getElementById('castModal');
+            if (castModal) {
+                const observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                            castModalVisible = castModal.classList.contains('show');
+                        }
+                    });
+                });
+                observer.observe(castModal, { attributes: true });
+                clearInterval(checkForCastModal);
+            }
+        }, 100);
+    };
+
 
     document.addEventListener('click', function(e) {
         if (!e.target.closest('.context-menu') && !e.target.closest('.video-card')) {
@@ -2145,8 +3207,29 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!e.target.closest('.subtitle-modal') && !e.target.closest('#subtitleBtn')) {
             hideSubtitleModal();
         }
+
+        // Handle cast modal clicks
         if (!e.target.closest('.cast-modal') && !e.target.closest('#castBtn')) {
-            hideCastModal();
+            const castModal = document.getElementById('castModal');
+            if (castModal && castModal.classList.contains('show')) {
+                handleCastClose();
+            }
+        }
+
+        // Handle blur overlay clicks
+        if (e.target.id === 'blurOverlay' || e.target.id === 'dragBlurOverlay') {
+            if (isContextMenuOpen) {
+                hideContextMenu();
+            }
+            if (isMoveMode) {
+                exitMoveMode();
+            }
+            if (castModalVisible) {
+                handleCastClose();
+            }
+            if (miniPlayerDragMode) {
+                endMiniPlayerHold();
+            }
         }
     });
 });
@@ -2193,5 +3276,31 @@ window.addEventListener('beforeunload', function() {
         saveProgressData();
     }
 });
+
+window.testMove = function(from, to) {
+    console.log(`Testing manual move from ${from} to ${to}`);
+    moveVideoToPosition(from, to);
+};
+
+window.testMoveFallback = function(from, to) {
+    console.log(`Testing fallback move from ${from} to ${to}`);
+    moveVideoToPositionFallback(from, to);
+};
+
+window.debugVideoLibrary = function() {
+    console.log('=== VIDEO LIBRARY DEBUG ===');
+    console.log('Array length:', videoLibrary.length);
+    console.log('Array contents:');
+    videoLibrary.forEach((v, i) => {
+        console.log(`  ${i}: ${v.title} (ID: ${v.id})`);
+    });
+
+    const cards = document.querySelectorAll('.video-card');
+    console.log('DOM cards count:', cards.length);
+    console.log('DOM contents:');
+    cards.forEach((card, i) => {
+        console.log(`  ${i}: ${card.dataset.title} (ID: ${card.dataset.videoId})`);
+    });
+};
 
 console.log('StreamHub JavaScript loaded successfully');

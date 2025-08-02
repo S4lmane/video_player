@@ -203,6 +203,7 @@ body {
     aspect-ratio: 16/9;
     background: var(--accent);
     will-change: transform;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .video-card:hover {
@@ -567,6 +568,113 @@ body {
     width: 0%;
     transition: width 3s linear;
     border-radius: 2px;
+}
+
+
+
+/* Prevent text selection during drag */
+.mini-player * {
+    pointer-events: auto;
+}
+
+.mini-player.dragging * {
+    pointer-events: none;
+}
+
+.mini-player.dragging .mini-control-btn,
+.mini-player.dragging .mini-close-btn,
+.mini-player.dragging .mini-artwork {
+    pointer-events: auto;
+}
+
+#dragBlurOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    z-index: 1400;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+#dragBlurOverlay.show {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.video-card {
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.video-card.moving {
+    z-index: 601;
+    transform: scale(1.05);
+    box-shadow: 0 15px 40px rgba(255, 255, 255, 0.2);
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.video-card.animating {
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Smooth transitions for repositioned cards */
+.video-card.sliding-left {
+    transform: translateX(-100%);
+}
+
+.video-card.sliding-right {
+    transform: translateX(100%);
+}
+
+/* Enhanced cast modal animations */
+.cast-modal {
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.cast-modal.casting-animation {
+    animation: castPulse 2s ease-out;
+}
+
+@keyframes castPulse {
+    0%, 100% {
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        transform: scale(1);
+    }
+    25% {
+        box-shadow: 0 20px 60px rgba(74, 222, 128, 0.8);
+        transform: scale(1.02);
+    }
+    50% {
+        box-shadow: 0 20px 60px rgba(74, 222, 128, 0.6);
+        transform: scale(1.01);
+    }
+    75% {
+        box-shadow: 0 20px 60px rgba(74, 222, 128, 0.4);
+        transform: scale(1.005);
+    }
+}
+
+/* Position indicators for mini player drag */
+.mini-player::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border: 2px dashed transparent;
+    border-radius: 20px;
+    pointer-events: none;
+    transition: border-color 0.3s ease;
+}
+
+.mini-player.dragging::after {
+    border-color: rgba(255, 255, 255, 0.5);
+    animation: dashFlow 2s linear infinite;
+}
+
+@keyframes dashFlow {
+    0% { border-color: rgba(255, 255, 255, 0.5); }
+    50% { border-color: rgba(255, 255, 255, 0.8); }
+    100% { border-color: rgba(255, 255, 255, 0.5); }
 }
 
 /* Enhanced Mini Player Effect CSS */
@@ -1355,8 +1463,14 @@ body {
     gap: 1rem;
     z-index: 1500;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-    transition: all 0.4s var(--spring);
+    /* transition: all 0.4s var(--spring); */
     overflow: hidden;
+    /* new */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+     user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 .mini-player::before {
@@ -1374,8 +1488,12 @@ body {
 }
 
 .mini-player:hover {
+    cursor: grab;
     transform: translateY(-4px) scale(1.02);
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+.mini-player:active {
+    cursor: grabbing;
 }
 
 @keyframes slideIn {
