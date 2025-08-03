@@ -1532,6 +1532,10 @@ function setupVideoPlayer() {
             progressData[currentVideo.id] = progressData[currentVideo.id] || { currentTime: 0, duration: player.duration };
             saveProgressData();
         }
+        // Smart Skip integration
+        if (window.smartSkipFunctions) {
+            window.smartSkipFunctions.onVideoLoaded();
+        }
     });
 
     player.addEventListener('timeupdate', function() {
@@ -1558,6 +1562,10 @@ function setupVideoPlayer() {
         document.getElementById('miniArtwork').classList.add('spinning');
         showActionFeedback('play_arrow', 'Playing');
         requestAnimationFrame(trackPerformance);
+        // Smart Skip integration
+        if (window.smartSkipFunctions) {
+            window.smartSkipFunctions.onVideoPlay();
+        }
     });
 
     player.addEventListener('pause', function() {
@@ -1567,11 +1575,19 @@ function setupVideoPlayer() {
         document.getElementById('miniPlayBtn').innerHTML = '<span class="material-icons">play_arrow</span>';
         document.getElementById('miniArtwork').classList.remove('spinning');
         showActionFeedback('pause', 'Paused');
+         // Smart Skip integration
+        if (window.smartSkipFunctions) {
+            window.smartSkipFunctions.onVideoPause();
+        }
     });
 
     player.addEventListener('ended', function() {
         console.log('Video ended, handling next action');
         handleVideoEnd();
+         // Smart Skip integration
+        if (window.smartSkipFunctions) {
+            window.smartSkipFunctions.onVideoEnded();
+        }
     });
 
     player.addEventListener('error', function(e) {
@@ -2803,6 +2819,22 @@ function setupKeyboardShortcuts() {
                 e.preventDefault();
                 handleCastToggle();
                 break;
+            case 'k':
+                if (e.metaKey) { // Cmd + K (Mac)
+                    e.preventDefault();
+                    if (window.smartSkipFunctions) {
+                        window.smartSkipFunctions.toggle();
+                    }
+                } else if (e.shiftKey) { // Shift + K
+                    e.preventDefault();
+                    if (window.smartSkipFunctions) {
+                        window.smartSkipFunctions.quickAdd();
+                    }
+                } else if (!e.ctrlKey && !e.metaKey && !e.altKey) { // Just K
+                    e.preventDefault();
+                    toggleSmartSkipModal();
+                }
+                break;
             case 'escape':
                 if (isContextMenuOpen) {
                     hideContextMenu();
@@ -3117,7 +3149,679 @@ function debugPlaybackModes() {
     console.log('Available modes:', modes);
     console.log('Current index:', modes.indexOf(playbackMode));
 }
+// === SMART SKIP SYSTEM ===
 
+// Smart Skip Variables
+let smartSkipRanges = [];
+let smartSkipHistory = [];
+let smartSkipStats = {
+    totalTimeSaved: 0,
+    sessionSkips: 0
+};
+let smartSkipModalVisible = false;
+let isSkipInProgress = false;
+let skipCheckInterval = null;
+
+// Smart Skip Modal Functions
+function toggleSmartSkipModal() {
+    const modal = document.getElementById('smartSkipModal');
+
+    if (smartSkipModalVisible) {
+        hideSmartSkipModal();
+    } else {
+        showSmartSkipModal();
+    }
+}
+
+function showSmartSkipModal() {
+    if (!currentVideo) {
+        showActionFeedback('error', 'No video loaded');
+        return;
+    }
+
+    const modal = document.getElementById('smartSkipModal');
+    modal.classList.add('show');
+    smartSkipModalVisible = true;
+
+    // Load existing data for current video
+    loadSmartSkipData();
+    updateSmartSkipUI();
+
+    // Focus first input
+    setTimeout(() => {
+        document.getElementById('skipFromTime').focus();
+    }, 100);
+
+    console.log('Smart Skip modal opened');
+}
+
+function hideSmartSkipModal() {
+    const modal = document.getElementById('smartSkipModal');
+    modal.classList.remove('show');
+    smartSkipModalVisible = false;
+
+    // Clear any error states
+    clearTimeInputErrors();
+
+    console.log('Smart Skip modal closed');
+}
+
+// Time Input Validation and Formatting
+function formatTimeInput(input) {
+    let value = input.value.replace(/[^\d:]/g, '');
+
+    // Auto-format as user types
+    if (value.length === 2 && !value.includes(':')) {
+        value = value + ':';
+    } else if (value.length === 4 && value.split(':').length === 2) {
+        const parts = value.split(':');
+        if (parts[1].length === 2) {
+            value = parts[0] + ':' + parts[1];
+        }
+    }
+
+    input.value = value;
+    validateTimeInput(input);
+}
+
+function validateTimeInput(input) {
+    const value = input.value;
+    const timeRegex = /^(\d{1,2}):([0-5]\d)$/;
+    const match = value.match(timeRegex);
+
+    if (value && !match) {
+        input.classList.add('error');
+        return false;
+    } else {
+        input.classList.remove('error');
+        return true;
+    }
+}
+
+function parseTimeToSeconds(timeStr) {
+    if (!timeStr) return 0;
+    const parts = timeStr.split(':');
+    if (parts.length !== 2) return 0;
+
+    const minutes = parseInt(parts[0]);
+    const seconds = parseInt(parts[1]);
+
+    if (isNaN(minutes) || isNaN(seconds)) return 0;
+    return minutes * 60 + seconds;
+}
+
+function formatSecondsToTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function clearTimeInputErrors() {
+    document.querySelectorAll('.time-input').forEach(input => {
+        input.classList.remove('error');
+    });
+
+    const errorMsg = document.querySelector('.skip-error-message');
+    if (errorMsg) {
+        errorMsg.remove();
+    }
+}
+
+// Smart Skip Range Management
+function addSkipRange() {
+    const fromInput = document.getElementById('skipFromTime');
+    const toInput = document.getElementById('skipToTime');
+
+    // Validate inputs
+    if (!validateTimeInput(fromInput) || !validateTimeInput(toInput)) {
+        showSkipError('Please enter valid time format (mm:ss)');
+        return;
+    }
+
+    if (!fromInput.value || !toInput.value) {
+        showSkipError('Please fill in both time fields');
+        return;
+    }
+
+    const fromSeconds = parseTimeToSeconds(fromInput.value);
+    const toSeconds = parseTimeToSeconds(toInput.value);
+    const player = document.getElementById('mainVideoPlayer');
+
+    // Validation checks
+    if (fromSeconds >= toSeconds) {
+        showSkipError('End time must be after start time');
+        return;
+    }
+
+    if (toSeconds > player.duration) {
+        showSkipError('End time cannot exceed video duration');
+        return;
+    }
+
+    // Check for overlapping ranges
+    const overlapping = smartSkipRanges.find(range =>
+        (fromSeconds >= range.from && fromSeconds < range.to) ||
+        (toSeconds > range.from && toSeconds <= range.to) ||
+        (fromSeconds <= range.from && toSeconds >= range.to)
+    );
+
+    if (overlapping) {
+        showSkipError('This range overlaps with an existing skip');
+        return;
+    }
+
+    // Add the range
+    const skipRange = {
+        id: Date.now(),
+        from: fromSeconds,
+        to: toSeconds,
+        duration: toSeconds - fromSeconds,
+        fromFormatted: fromInput.value,
+        toFormatted: toInput.value
+    };
+
+    smartSkipRanges.push(skipRange);
+    smartSkipRanges.sort((a, b) => a.from - b.from);
+
+    // Clear inputs
+    fromInput.value = '';
+    toInput.value = '';
+
+    // Update UI
+    updateSmartSkipUI();
+    saveSmartSkipData();
+
+    showActionFeedback('add', `Skip range added: ${skipRange.fromFormatted} - ${skipRange.toFormatted}`);
+    console.log('Added skip range:', skipRange);
+}
+
+function removeSkipRange(id) {
+    smartSkipRanges = smartSkipRanges.filter(range => range.id !== id);
+    updateSmartSkipUI();
+    saveSmartSkipData();
+    showActionFeedback('remove', 'Skip range removed');
+}
+
+function clearAllSkips() {
+    if (smartSkipRanges.length === 0) return;
+
+    smartSkipRanges = [];
+    updateSmartSkipUI();
+    saveSmartSkipData();
+    showActionFeedback('clear_all', 'All skip ranges cleared');
+}
+
+function jumpToSkipRange(range) {
+    const player = document.getElementById('mainVideoPlayer');
+    player.currentTime = range.from;
+    showActionFeedback('skip_next', `Jumped to ${range.fromFormatted}`);
+}
+
+// Smart Skip Execution
+function checkForSkips() {
+    if (!currentVideo || smartSkipRanges.length === 0 || isSkipInProgress) return;
+
+    const player = document.getElementById('mainVideoPlayer');
+    const currentTime = player.currentTime;
+
+    const activeRange = smartSkipRanges.find(range =>
+        currentTime >= range.from && currentTime < range.to
+    );
+
+    if (activeRange) {
+        executeSkip(activeRange);
+    }
+}
+
+function executeSkip(range) {
+    if (isSkipInProgress) return;
+
+    isSkipInProgress = true;
+    const player = document.getElementById('mainVideoPlayer');
+
+    // Add skip to history
+    addToSkipHistory(range);
+
+    // Update stats
+    smartSkipStats.sessionSkips++;
+    smartSkipStats.totalTimeSaved += range.duration;
+
+    // Jump to end of skip range
+    player.currentTime = range.to;
+
+    // Visual feedback
+    showSkipPulse();
+    showActionFeedback('fast_forward', `Skipped ${formatSecondsToTime(range.duration)}`);
+
+    // Update UI if modal is open
+    if (smartSkipModalVisible) {
+        updateSmartSkipUI();
+    }
+
+    console.log('Executed skip:', range);
+
+    // Reset skip flag after a brief delay
+    setTimeout(() => {
+        isSkipInProgress = false;
+    }, 500);
+}
+
+function showSkipPulse() {
+    const btn = document.getElementById('smartSkipBtn');
+    btn.classList.add('skipping');
+
+    setTimeout(() => {
+        btn.classList.remove('skipping');
+    }, 300);
+}
+
+// Smart Skip History
+function addToSkipHistory(range) {
+    const historyItem = {
+        id: Date.now(),
+        range: range,
+        timestamp: new Date(),
+        videoTitle: currentVideo.title,
+        timeSaved: range.duration
+    };
+
+    smartSkipHistory.unshift(historyItem);
+
+    // Keep only last 50 items
+    if (smartSkipHistory.length > 50) {
+        smartSkipHistory = smartSkipHistory.slice(0, 50);
+    }
+
+    saveSmartSkipData();
+}
+
+function clearSkipHistory() {
+    if (smartSkipHistory.length === 0) return;
+
+    smartSkipHistory = [];
+    updateSmartSkipUI();
+    saveSmartSkipData();
+    showActionFeedback('history_toggle_off', 'Skip history cleared');
+}
+
+// UI Updates
+function updateSmartSkipUI() {
+    updateSkipRangesList();
+    updateSkipStats();
+    updateSkipHistory();
+    updateSmartSkipButton();
+}
+
+function updateSkipRangesList() {
+    const container = document.getElementById('skipRangesList');
+    const countElement = document.getElementById('skipCount');
+
+    countElement.textContent = `(${smartSkipRanges.length})`;
+
+    if (smartSkipRanges.length === 0) {
+        container.innerHTML = '<div class="no-skips-message">No skip ranges set</div>';
+        return;
+    }
+
+    const player = document.getElementById('mainVideoPlayer');
+    const currentTime = player ? player.currentTime : 0;
+
+    container.innerHTML = smartSkipRanges.map(range => {
+        const isActive = currentTime >= range.from && currentTime < range.to;
+        const duration = formatSecondsToTime(range.duration);
+
+        return `
+            <div class="skip-range-item ${isActive ? 'active' : ''}" data-id="${range.id}">
+                <div class="skip-range-info">
+                    <div class="skip-range-time">${range.fromFormatted} → ${range.toFormatted}</div>
+                    <div class="skip-range-duration">Saves ${duration}</div>
+                </div>
+                <div class="skip-range-actions">
+                    <button class="skip-action-btn" onclick="jumpToSkipRange({
+                        id: ${range.id},
+                        from: ${range.from},
+                        to: ${range.to},
+                        fromFormatted: '${range.fromFormatted}',
+                        toFormatted: '${range.toFormatted}'
+                    })" title="Jump to skip (2s before)">
+                        <span class="material-icons">skip_next</span>
+                    </button>
+                    <button class="skip-action-btn delete" onclick="removeSkipRange(${range.id})" title="Delete">
+                        <span class="material-icons">delete</span>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateSkipStats() {
+    const totalSaved = smartSkipRanges.reduce((total, range) => total + range.duration, 0);
+    const player = document.getElementById('mainVideoPlayer');
+    const originalDuration = player ? player.duration : 0;
+    const newDuration = Math.max(0, originalDuration - totalSaved);
+
+    document.getElementById('totalTimeSaved').textContent = formatSecondsToTime(totalSaved);
+    document.getElementById('newDuration').textContent = formatSecondsToTime(newDuration);
+    document.getElementById('sessionSkips').textContent = smartSkipStats.sessionSkips;
+}
+
+function updateSkipHistory() {
+    const container = document.getElementById('skipHistoryList');
+
+    if (smartSkipHistory.length === 0) {
+        container.innerHTML = '<div class="no-history-message">No skips performed yet</div>';
+        return;
+    }
+
+    container.innerHTML = smartSkipHistory.slice(0, 10).map(item => {
+        const timeStr = `${item.range.fromFormatted} → ${item.range.toFormatted}`;
+        const timestamp = item.timestamp.toLocaleTimeString();
+        const saved = formatSecondsToTime(item.timeSaved);
+
+        return `
+            <div class="skip-history-item">
+                <div class="skip-history-info">
+                    <div class="skip-history-time">${timeStr}</div>
+                    <div class="skip-history-timestamp">${timestamp}</div>
+                </div>
+                <div class="skip-history-saved">-${saved}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateSmartSkipButton() {
+    const btn = document.getElementById('smartSkipBtn');
+    if (smartSkipRanges.length > 0) {
+        btn.classList.add('active');
+        btn.title = `Smart Skip (${smartSkipRanges.length} ranges)`;
+    } else {
+        btn.classList.remove('active');
+        btn.title = 'Smart Skip';
+    }
+}
+
+// Preset Functions
+function setCurrentTimeAsFrom() {
+    const player = document.getElementById('mainVideoPlayer');
+    if (!player) return;
+
+    const currentTime = Math.floor(player.currentTime);
+    const formattedTime = formatSecondsToTime(currentTime);
+    document.getElementById('skipFromTime').value = formattedTime;
+    validateTimeInput(document.getElementById('skipFromTime'));
+    showActionFeedback('schedule', `Set from time: ${formattedTime}`);
+}
+
+function setCurrentTimeAsTo() {
+    const player = document.getElementById('mainVideoPlayer');
+    if (!player) return;
+
+    const currentTime = Math.floor(player.currentTime);
+    const formattedTime = formatSecondsToTime(currentTime);
+    document.getElementById('skipToTime').value = formattedTime;
+    validateTimeInput(document.getElementById('skipToTime'));
+    showActionFeedback('schedule', `Set to time: ${formattedTime}`);
+}
+
+// Error Handling
+function showSkipError(message) {
+    clearTimeInputErrors();
+
+    const container = document.querySelector('.skip-time-inputs');
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'skip-error-message';
+    errorDiv.innerHTML = `
+        <span class="material-icons" style="font-size: 0.75rem;">error</span>
+        ${message}
+    `;
+
+    container.appendChild(errorDiv);
+
+    setTimeout(() => {
+        if (errorDiv.parentNode) {
+            errorDiv.remove();
+        }
+    }, 3000);
+}
+
+// Data Persistence
+function saveSmartSkipData() {
+    if (!currentVideo) return;
+
+    try {
+        const skipData = {
+            ranges: smartSkipRanges,
+            history: smartSkipHistory,
+            stats: smartSkipStats
+        };
+
+        const key = `smartSkip_${currentVideo.id}`;
+        localStorage.setItem(key, JSON.stringify(skipData));
+
+        // Also save global history and stats
+        localStorage.setItem('smartSkip_globalHistory', JSON.stringify(smartSkipHistory));
+        localStorage.setItem('smartSkip_globalStats', JSON.stringify(smartSkipStats));
+
+        console.log('Smart skip data saved for video:', currentVideo.title);
+    } catch (error) {
+        console.error('Failed to save smart skip data:', error);
+    }
+}
+
+function loadSmartSkipData() {
+    if (!currentVideo) return;
+
+    try {
+        // Load video-specific data
+        const key = `smartSkip_${currentVideo.id}`;
+        const saved = localStorage.getItem(key);
+
+        if (saved) {
+            const data = JSON.parse(saved);
+            smartSkipRanges = data.ranges || [];
+            console.log(`Loaded ${smartSkipRanges.length} skip ranges for "${currentVideo.title}"`);
+        } else {
+            smartSkipRanges = [];
+            console.log(`No saved skip ranges found for "${currentVideo.title}"`);
+        }
+
+        // Load global history and stats
+        const globalHistory = localStorage.getItem('smartSkip_globalHistory');
+        const globalStats = localStorage.getItem('smartSkip_globalStats');
+
+        if (globalHistory) {
+            smartSkipHistory = JSON.parse(globalHistory);
+            // Filter out old entries (keep last 30 days)
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            smartSkipHistory = smartSkipHistory.filter(item =>
+                new Date(item.timestamp) > thirtyDaysAgo
+            );
+        } else {
+            smartSkipHistory = [];
+        }
+
+        if (globalStats) {
+            smartSkipStats = JSON.parse(globalStats);
+        } else {
+            smartSkipStats = { totalTimeSaved: 0, sessionSkips: 0 };
+        }
+
+        console.log('Smart skip data loaded:', {
+            video: currentVideo.title,
+            ranges: smartSkipRanges.length,
+            historyItems: smartSkipHistory.length,
+            sessionSkips: smartSkipStats.sessionSkips
+        });
+
+    } catch (error) {
+        console.error('Failed to load smart skip data:', error);
+        smartSkipRanges = [];
+        smartSkipHistory = [];
+        smartSkipStats = { totalTimeSaved: 0, sessionSkips: 0 };
+    }
+}
+
+// Smart Skip Initialization and Control
+function initializeSmartSkip() {
+    console.log('Initializing Smart Skip system...');
+
+    // Set up time input formatters
+    const timeInputs = document.querySelectorAll('.time-input');
+    timeInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            formatTimeInput(this);
+        });
+
+        input.addEventListener('keydown', function(e) {
+            // Allow only numbers, colon, backspace, delete, tab, escape, enter, and arrow keys
+            const allowedKeys = [
+                'Backspace', 'Delete', 'Tab', 'Escape', 'Enter',
+                'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'
+            ];
+
+            if (allowedKeys.includes(e.key) ||
+                (e.key >= '0' && e.key <= '9') ||
+                e.key === ':' ||
+                (e.ctrlKey && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase()))) {
+                return;
+            }
+
+            e.preventDefault();
+        });
+
+        input.addEventListener('paste', function(e) {
+            setTimeout(() => formatTimeInput(this), 0);
+        });
+    });
+
+    // Set up keyboard shortcuts
+    setupSmartSkipShortcuts();
+
+    console.log('Smart Skip system initialized');
+}
+
+function startSmartSkipMonitoring() {
+    if (skipCheckInterval) {
+        clearInterval(skipCheckInterval);
+    }
+
+    skipCheckInterval = setInterval(checkForSkips, 100); // Check every 100ms for precise skipping
+    console.log('Smart skip monitoring started');
+}
+
+function stopSmartSkipMonitoring() {
+    if (skipCheckInterval) {
+        clearInterval(skipCheckInterval);
+        skipCheckInterval = null;
+    }
+    console.log('Smart skip monitoring stopped');
+}
+
+// Keyboard Shortcuts for Smart Skip
+function setupSmartSkipShortcuts() {
+    // These will be integrated into the main keyboard handler
+    console.log('Smart Skip keyboard shortcuts registered');
+}
+
+// Integration with Video Player Events
+function onVideoLoadedSmartSkip() {
+    loadSmartSkipData();
+    updateSmartSkipUI();
+    startSmartSkipMonitoring();
+}
+
+function onVideoEndedSmartSkip() {
+    stopSmartSkipMonitoring();
+}
+
+function onVideoPlaySmartSkip() {
+    startSmartSkipMonitoring();
+}
+
+function onVideoPauseSmartSkip() {
+    // Keep monitoring even when paused for UI updates
+}
+
+// Smart Skip Quick Actions (for shortcuts)
+function quickAddSkip() {
+    const player = document.getElementById('mainVideoPlayer');
+    if (!player || !currentVideo) {
+        showActionFeedback('error', 'No video loaded');
+        return;
+    }
+
+    const currentTime = Math.floor(player.currentTime);
+    const endTime = Math.min(currentTime + 30, Math.floor(player.duration)); // Default 30-second skip
+
+    if (endTime <= currentTime) {
+        showActionFeedback('error', 'Cannot create skip at end of video');
+        return;
+    }
+
+    const skipRange = {
+        id: Date.now(),
+        from: currentTime,
+        to: endTime,
+        duration: endTime - currentTime,
+        fromFormatted: formatSecondsToTime(currentTime),
+        toFormatted: formatSecondsToTime(endTime)
+    };
+
+    smartSkipRanges.push(skipRange);
+    smartSkipRanges.sort((a, b) => a.from - b.from);
+
+    updateSmartSkipUI();
+    saveSmartSkipData();
+
+    showActionFeedback('add', `Quick skip added: 30s from ${skipRange.fromFormatted}`);
+}
+
+function toggleSmartSkipEnabled() {
+    // Toggle smart skip monitoring on/off
+    if (skipCheckInterval) {
+        stopSmartSkipMonitoring();
+        showActionFeedback('pause', 'Smart Skip disabled');
+    } else {
+        startSmartSkipMonitoring();
+        showActionFeedback('play_arrow', 'Smart Skip enabled');
+    }
+}
+
+// Smart Skip Modal Click Outside to Close
+function handleSmartSkipOutsideClick(event) {
+    const modal = document.getElementById('smartSkipModal');
+    const btn = document.getElementById('smartSkipBtn');
+
+    if (smartSkipModalVisible &&
+        !modal.contains(event.target) &&
+        !btn.contains(event.target)) {
+        hideSmartSkipModal();
+    }
+}
+
+// Export functions for integration
+window.smartSkipFunctions = {
+    initialize: initializeSmartSkip,
+    onVideoLoaded: onVideoLoadedSmartSkip,
+    onVideoEnded: onVideoEndedSmartSkip,
+    onVideoPlay: onVideoPlaySmartSkip,
+    onVideoPause: onVideoPauseSmartSkip,
+    quickAdd: quickAddSkip,
+    toggle: toggleSmartSkipEnabled,
+    handleOutsideClick: handleSmartSkipOutsideClick
+};
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Wait a bit for other systems to initialize
+    setTimeout(() => {
+        initializeSmartSkip();
+    }, 100);
+});
+
+///////////////////////////// SMART SKIP END /////////////////////////:
 function testplayerani(type, duration = 1) {
     console.log('=== MINI PLAYER ANIMATION TEST ===');
 
@@ -3265,6 +3969,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setupPlaybackModeButton();
     observeCastModal();
     initializePictureInPicture();
+    setTimeout(() => {
+        initializeSmartSkip();
+    }, 100);
 
     document.getElementById('videoInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') addVideo();
@@ -3358,6 +4065,10 @@ function initializeMiniPlayerDrag() {
         }
         if (!e.target.closest('.subtitle-modal') && !e.target.closest('#subtitleBtn')) {
             hideSubtitleModal();
+        }
+
+        if (window.smartSkipFunctions) {
+            window.smartSkipFunctions.handleOutsideClick(e);
         }
 
         // Handle cast modal clicks

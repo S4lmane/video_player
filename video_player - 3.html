@@ -103,6 +103,7 @@
                 <div class="subtitle-text" id="subtitleText"></div>
             </div>
 
+            <!-- subtitle modal -->
             <div class="subtitle-modal" id="subtitleModal">
                 <div class="subtitle-modal-header">
                     <h3 class="subtitle-modal-title">Subtitles</h3>
@@ -122,6 +123,87 @@
                         <span class="material-icons" style="font-size: 0.875rem; margin-right: 0.5rem;">upload</span>
                         Upload SRT File
                     </button>
+                </div>
+            </div>
+
+            <!-- Smart Skip Modal -->
+            <div class="smart-skip-modal" id="smartSkipModal">
+                <div class="smart-skip-header">
+                    <h3 class="smart-skip-title">Smart Skip</h3>
+                    <button class="smart-skip-close-btn" onclick="hideSmartSkipModal()">
+                        <span class="material-icons">close</span>
+                    </button>
+                </div>
+
+                <div class="smart-skip-content">
+                    <!-- Add Skip Section -->
+                    <div class="smart-skip-section">
+                        <h4 class="smart-skip-section-title">Add Skip Range</h4>
+                        <div class="skip-time-inputs">
+                            <div class="time-input-group">
+                                <label>From:</label>
+                                <input type="text" class="time-input" id="skipFromTime" placeholder="mm:ss" maxlength="8">
+                            </div>
+                            <div class="time-input-group">
+                                <label>To:</label>
+                                <input type="text" class="time-input" id="skipToTime" placeholder="mm:ss" maxlength="8">
+                            </div>
+                            <button class="add-skip-btn" onclick="addSkipRange()">
+                                <span class="material-icons">add</span>
+                                Add Skip
+                            </button>
+                        </div>
+                        <div class="skip-presets">
+                            <button class="preset-btn" onclick="setCurrentTimeAsFrom()">Use Current Time as From</button>
+                            <button class="preset-btn" onclick="setCurrentTimeAsTo()">Use Current Time as To</button>
+                        </div>
+                    </div>
+
+                    <!-- Active Skips Section -->
+                    <div class="smart-skip-section">
+                        <h4 class="smart-skip-section-title">
+                            Active Skips
+                            <span class="skip-count" id="skipCount">(0)</span>
+                            <button class="clear-all-btn" onclick="clearAllSkips()" title="Clear All">
+                                <span class="material-icons">clear_all</span>
+                            </button>
+                        </h4>
+                        <div class="skip-ranges-list" id="skipRangesList">
+                            <div class="no-skips-message">No skip ranges set</div>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Section -->
+                    <div class="smart-skip-section">
+                        <h4 class="smart-skip-section-title">Statistics</h4>
+                        <div class="skip-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Total Time Saved:</span>
+                                <span class="stat-value" id="totalTimeSaved">0:00</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">New Duration:</span>
+                                <span class="stat-value" id="newDuration">0:00</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Skips This Session:</span>
+                                <span class="stat-value" id="sessionSkips">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- History Section -->
+                    <div class="smart-skip-section">
+                        <h4 class="smart-skip-section-title">
+                            Skip History
+                            <button class="clear-history-btn" onclick="clearSkipHistory()" title="Clear History">
+                                <span class="material-icons">history_toggle_off</span>
+                            </button>
+                        </h4>
+                        <div class="skip-history-list" id="skipHistoryList">
+                            <div class="no-history-message">No skips performed yet</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -171,6 +253,10 @@
 
                         <button class="control-btn" id="subtitleBtn" onclick="toggleSubtitleModal()">
                             <span class="material-icons">subtitles</span>
+                        </button>
+
+                        <button class="control-btn smart-skip-btn" id="smartSkipBtn" onclick="toggleSmartSkipModal()">
+                            <span class="material-icons">fast_forward</span>
                         </button>
 
                         <button class="control-btn" id="castBtn" onclick="toggleCast()">
@@ -296,6 +382,18 @@
                 <div class="shortcut-item">
                     <span class="shortcut-action">Toggle playback mode</span>
                     <span class="shortcut-key">L</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-action">Smart Skip</span>
+                    <span class="shortcut-key">K</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-action">Quick Add Skip (30s)</span>
+                    <span class="shortcut-key">⇧ + K</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-action">Toggle Skip Monitoring</span>
+                    <span class="shortcut-key">⌘ + K</span>
                 </div>
                 <div class="shortcut-item">
                     <span class="shortcut-action">Cast to device</span>
