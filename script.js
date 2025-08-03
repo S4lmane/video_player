@@ -43,108 +43,25 @@ let videoLibrary = [
     },
     {
         id: 5,
-        title: "Utopia - Soundtrack",
+        title: "Whiplash",
         duration: "3:20",
         type: "MP4",
-        url: "./videos/Utopia_Soundtrack.mp4",
-        thumbnail: "./videos/Utopia_Soundtrack.png",
-        subtitles: null
+        url: "./videos/Whiplash.mp4",
+        thumbnail: "./videos/Whiplash.jpg",
+        subtitles: [
+            { language: "English", url: "./subtitles/[cc-eng] Whiplash.srt" }
+        ]
     },
     {
         id: 6,
-        title: "Lalo Salamanca",
-        duration: "127:59",
+        title: "Whiplash",
+        duration: "3:20",
         type: "MP4",
-        url: "./videos/lalo_salamanca.mp4",
-        thumbnail: "./videos/lalo_salamanca.jpg",
+        url: "./videos/Whiplash.mp4",
+        thumbnail: "./videos/Whiplash_2.jpg",
         subtitles: [
-            { language: "English", url: "./subtitles/english.srt" },
-            { language: "Spanish", url: "./subtitles/spanish.srt" }
+            { language: "English", url: "./subtitles/[cc-eng] Whiplash.srt" }
         ]
-    },
-    {
-        id: 7,
-        title: "5 Second",
-        duration: "1:45",
-        type: "MP4",
-        url: "./videos/5sec_vid.mp4",
-        thumbnail: "./videos/5sec_vid.jpg",
-        subtitles: null
-    },
-    {
-        id: 8,
-        title: "The Conjuring: Last Rites",
-        duration: "3:20",
-        type: "MP4",
-        url: "./videos/theconjuring.mp4",
-        thumbnail: "./videos/theconjuring.jpg",
-        subtitles: null
-    },
-    {
-        id: 9,
-        title: "As Above, So Below",
-        duration: "3:20",
-        type: "MP4",
-        url: "./videos/As Above So Below.mp4",
-        thumbnail: "./videos/As Above So Below.jpg",
-        subtitles: null
-    },
-    {
-        id: 10,
-        title: "Utopia - Soundtrack",
-        duration: "3:20",
-        type: "MP4",
-        url: "./videos/Utopia_Soundtrack.mp4",
-        thumbnail: "./videos/Utopia_Soundtrack.png",
-        subtitles: null
-    },
-    {
-        id: 11,
-        title: "Lalo Salamanca",
-        duration: "127:59",
-        type: "MP4",
-        url: "./videos/lalo_salamanca.mp4",
-        thumbnail: "./videos/lalo_salamanca.jpg",
-        subtitles: [
-            { language: "English", url: "./subtitles/english.srt" },
-            { language: "Spanish", url: "./subtitles/spanish.srt" }
-        ]
-    },
-    {
-        id: 12,
-        title: "5 Second",
-        duration: "1:45",
-        type: "MP4",
-        url: "./videos/5sec_vid.mp4",
-        thumbnail: "./videos/5sec_vid.jpg",
-        subtitles: null
-    },
-    {
-        id: 13,
-        title: "The Conjuring: Last Rites",
-        duration: "3:20",
-        type: "MP4",
-        url: "./videos/theconjuring.mp4",
-        thumbnail: "./videos/theconjuring.jpg",
-        subtitles: null
-    },
-    {
-        id: 14,
-        title: "As Above, So Below",
-        duration: "3:20",
-        type: "MP4",
-        url: "./videos/As Above So Below.mp4",
-        thumbnail: "./videos/As Above So Below.jpg",
-        subtitles: null
-    },
-    {
-        id: 15,
-        title: "Utopia - Soundtrack",
-        duration: "3:20",
-        type: "MP4",
-        url: "./videos/Utopia_Soundtrack.mp4",
-        thumbnail: "./videos/Utopia_Soundtrack.png",
-        subtitles: null
     }
 ];
 
@@ -2170,9 +2087,9 @@ function hideMiniInfo() {
     document.getElementById('miniInfoModal').classList.remove('show');
 }
 
-// Subtitle Functions
+// Enhanced subtitle loading with full format support
 function loadAvailableSubtitles() {
-    console.log('Loading available subtitles for video:', currentVideo ? currentVideo.title : 'None');
+    console.log('🎬 Loading subtitles with comprehensive format support...');
     const subtitleOptions = document.getElementById('subtitleOptions');
     subtitleOptions.innerHTML = `
         <div class="subtitle-option active" onclick="selectSubtitle(null)">
@@ -2184,8 +2101,11 @@ function loadAvailableSubtitles() {
     currentSubtitleTrack = null;
 
     if (currentVideo && currentVideo.subtitles) {
-        currentVideo.subtitles.forEach(sub => {
-            console.log('Loading subtitle:', sub.language, sub.url);
+        console.log(`📂 Loading ${currentVideo.subtitles.length} subtitle tracks`);
+
+        currentVideo.subtitles.forEach((sub, index) => {
+            console.log(`📝 Loading ${sub.language} from ${sub.url}`);
+
             const option = document.createElement('div');
             option.className = 'subtitle-option';
             option.innerHTML = `
@@ -2197,53 +2117,173 @@ function loadAvailableSubtitles() {
 
             fetch(sub.url)
                 .then(response => {
-                    if (!response.ok) throw new Error(`Failed to fetch subtitle: ${sub.url}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
                     return response.text();
                 })
                 .then(data => {
-                    console.log('Subtitle data fetched:', sub.language, data.slice(0, 50) + '...');
-                    return parseSRT(data);
-                })
-                .then(parsed => {
-                    console.log('Parsed subtitle entries:', sub.language, parsed.length);
-                    currentSubtitles.push({ language: sub.language, entries: parsed });
+                    console.log(`📄 Processing ${sub.language} (${data.length} chars)`);
+
+                    const parsed = parseSRT(data);
+                    console.log(`✅ ${sub.language}: ${parsed.length} entries parsed`);
+
+                    if (parsed.length === 0) {
+                        throw new Error('No valid subtitle entries found');
+                    }
+
+                    currentSubtitles.push({
+                        language: sub.language,
+                        entries: parsed,
+                        stats: validateSubtitles(parsed)
+                    });
+
+                    showActionFeedback('subtitles', `${sub.language} loaded (${parsed.length} entries)`);
+
+                    // Show format info for formatted subtitles
+                    const formattedCount = parsed.filter(e => e.hasFormatting).length;
+                    if (formattedCount > 0) {
+                        console.log(`🎨 ${sub.language} has ${formattedCount} formatted entries`);
+                    }
                 })
                 .catch(err => {
-                    console.error('Error loading subtitle:', sub.language, err);
+                    console.error(`❌ Failed to load ${sub.language}:`, err);
                     handleSubtitleError(err, sub.language);
+                    option.remove();
                 });
         });
     } else {
-        console.log('No subtitles available for this video');
+        console.log('📭 No subtitles available for this video');
     }
 }
 
-function parseSRT(data) {
-    console.log('Parsing SRT data');
-    const entries = [];
-    const blocks = data.split(/\n\s*\n/);
+function applySubtitlePositioning(overlay, position) {
+    if (!position) {
+        // Reset to default positioning
+        overlay.style.left = '50%';
+        overlay.style.right = 'auto';
+        overlay.style.top = 'auto';
+        overlay.style.bottom = '120px';
+        overlay.style.transform = 'translateX(-50%)';
+        return;
+    }
 
-    for (let block of blocks) {
-        const lines = block.trim().split('\n');
-        if (lines.length < 3) continue;
+    // Apply custom positioning based on X1, X2, Y1, Y2 values
+    const playerContainer = document.getElementById('playerContainer');
+    const containerRect = playerContainer.getBoundingClientRect();
 
-        const index = parseInt(lines[0]);
-        if (isNaN(index)) continue;
+    if (position.x1 !== undefined && position.x2 !== undefined) {
+        const leftPercent = (position.x1 / containerRect.width) * 100;
+        const widthPercent = ((position.x2 - position.x1) / containerRect.width) * 100;
 
-        const timeLine = lines[1];
+        overlay.style.left = `${leftPercent}%`;
+        overlay.style.width = `${widthPercent}%`;
+        overlay.style.transform = 'none';
+    }
 
-        if (timeLine.includes(' --> ')) {
-            const timeParts = timeLine.split(' --> ');
-            if (timeParts.length === 2) {
-                const startTime = parseTime(timeParts[0].trim());
-                const endTime = parseTime(timeParts[1].trim());
-                const text = lines.slice(2).join('\n').replace(/<[^>]*>/g, '');
+    if (position.y1 !== undefined && position.y2 !== undefined) {
+        const topPercent = (position.y1 / containerRect.height) * 100;
 
-                entries.push({ index, startTime, endTime, text });
-            }
+        overlay.style.top = `${topPercent}%`;
+        overlay.style.bottom = 'auto';
+    }
+}
+
+function validateSubtitles(entries) {
+    let issueCount = 0;
+    let overlaps = [];
+
+    for (let i = 0; i < entries.length - 1; i++) {
+        const current = entries[i];
+        const next = entries[i + 1];
+
+        // Check for overlaps
+        if (current.endTime > next.startTime) {
+            const overlap = {
+                current: current.index,
+                next: next.index,
+                overlapTime: current.endTime - next.startTime
+            };
+            overlaps.push(overlap);
+            console.warn(`⚠️ Subtitle overlap: ${current.index} → ${next.index} (${overlap.overlapTime.toFixed(2)}s)`);
+            issueCount++;
+        }
+
+        // Check for very short durations
+        if (current.duration < 0.5) {
+            console.warn(`⚠️ Very short subtitle: ${current.index} (${current.duration.toFixed(2)}s)`);
+        }
+
+        // Check for very long durations
+        if (current.duration > 30) {
+            console.warn(`⚠️ Very long subtitle: ${current.index} (${current.duration.toFixed(2)}s)`);
         }
     }
-    console.log('SRT parsed, entries:', entries.length);
+
+    // Summary report
+    const formattedCount = entries.filter(e => e.hasFormatting).length;
+    const positionedCount = entries.filter(e => e.position).length;
+
+    console.log(`📊 Subtitle Analysis:`);
+    console.log(`  • Total entries: ${entries.length}`);
+    console.log(`  • With HTML formatting: ${formattedCount}`);
+    console.log(`  • With positioning: ${positionedCount}`);
+    console.log(`  • Timing issues: ${issueCount}`);
+    console.log(`  • Overlaps: ${overlaps.length}`);
+
+    return {
+        totalEntries: entries.length,
+        formattedEntries: formattedCount,
+        positionedEntries: positionedCount,
+        issues: issueCount,
+        overlaps: overlaps
+    };
+}
+
+
+// Enhanced SRT Parser supporting all HTML tags, colors, positioning, and formatting
+function parseSRT(data) {
+    console.log('🎬 Parsing SRT data with comprehensive format support...');
+    const entries = [];
+
+    // Clean up the data first
+    const cleanData = data
+        .replace(/\r\n/g, '\n')  // Normalize line endings
+        .replace(/\r/g, '\n')    // Handle old Mac line endings
+        .replace(/^\uFEFF/, '')  // Remove BOM if present
+        .trim();
+
+    // Split by double newlines (subtitle blocks)
+    const blocks = cleanData.split(/\n\s*\n/);
+    console.log(`📝 Found ${blocks.length} subtitle blocks`);
+
+    for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i].trim();
+        if (!block) continue;
+
+        const lines = block.split('\n');
+        if (lines.length < 3) {
+            console.warn(`⚠️ Block ${i + 1} has insufficient lines:`, lines.length);
+            continue;
+        }
+
+        try {
+            const entry = parseSubtitleBlock(lines, i + 1);
+            if (entry) {
+                entries.push(entry);
+            }
+        } catch (error) {
+            console.error(`❌ Error parsing block ${i + 1}:`, error);
+            continue;
+        }
+    }
+
+    console.log(`✅ Successfully parsed ${entries.length} subtitle entries`);
+
+    // Sort by start time and validate
+    entries.sort((a, b) => a.startTime - b.startTime);
+    validateSubtitles(entries);
+
     return entries;
 }
 
@@ -2293,6 +2333,133 @@ function selectSubtitle(subtitle) {
     showActionFeedback('subtitles', subtitle ? `${subtitle.language} Subtitles` : 'Subtitles Off');
 }
 
+function parseSubtitleBlock(lines, blockNumber) {
+    // Parse subtitle number
+    const indexLine = lines[0].trim();
+    const index = parseInt(indexLine);
+    if (isNaN(index)) {
+        console.warn(`❌ Invalid subtitle index in block ${blockNumber}:`, indexLine);
+        return null;
+    }
+
+    // Parse timing line with position support
+    const timeLine = lines[1].trim();
+    const { startTime, endTime, position } = parseTimingLine(timeLine, blockNumber);
+
+    if (startTime === null || endTime === null) {
+        return null;
+    }
+
+    // Get subtitle text (everything after the timing line)
+    let rawText = lines.slice(2).join('\n').trim();
+
+    // Parse and process the text with full HTML support
+    const processedText = processSubtitleText(rawText);
+
+    return {
+        index,
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        rawText,
+        text: processedText.plainText,
+        html: processedText.html,
+        styles: processedText.styles,
+        position: position,
+        hasFormatting: processedText.hasFormatting
+    };
+}
+
+function parseTimingLine(timeLine, blockNumber) {
+    // Support both SRT and position formats
+    // Examples:
+    // 00:00:01,000 --> 00:00:03,000
+    // 00:00:01,000 --> 00:00:03,000 X1:40 X2:600 Y1:20 Y2:50
+
+    const timeMatch = timeLine.match(/(\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,\.]\d{3})(.*)/);
+
+    if (!timeMatch) {
+        console.warn(`❌ Invalid timing format in block ${blockNumber}:`, timeLine);
+        return { startTime: null, endTime: null, position: null };
+    }
+
+    const startTimeStr = timeMatch[1];
+    const endTimeStr = timeMatch[2];
+    const positionStr = timeMatch[3] ? timeMatch[3].trim() : '';
+
+    const startTime = parseTimeWithFallback(startTimeStr);
+    const endTime = parseTimeWithFallback(endTimeStr);
+    const position = parsePosition(positionStr);
+
+    if (startTime === null || endTime === null) {
+        console.warn(`❌ Failed to parse times in block ${blockNumber}:`, startTimeStr, endTimeStr);
+        return { startTime: null, endTime: null, position: null };
+    }
+
+    if (startTime >= endTime) {
+        console.warn(`❌ Invalid time range in block ${blockNumber}: start >= end`);
+        return { startTime: null, endTime: null, position: null };
+    }
+
+    return { startTime, endTime, position };
+}
+
+function parseTimeWithFallback(timeStr) {
+    try {
+        // Handle both comma and dot as decimal separator
+        const normalizedTime = timeStr.replace(',', '.');
+        const parts = normalizedTime.split(':');
+
+        if (parts.length !== 3) {
+            throw new Error('Invalid time format: expected HH:MM:SS.mmm');
+        }
+
+        const hours = parseInt(parts[0]);
+        const minutes = parseInt(parts[1]);
+        const secondsParts = parts[2].split('.');
+        const seconds = parseInt(secondsParts[0]);
+        const milliseconds = parseInt((secondsParts[1] || '0').padEnd(3, '0').slice(0, 3));
+
+        if (isNaN(hours) || isNaN(minutes) || isNaN(seconds) || isNaN(milliseconds)) {
+            throw new Error('Invalid numeric values in time');
+        }
+
+        if (minutes >= 60 || seconds >= 60 || milliseconds >= 1000) {
+            throw new Error('Time values out of range');
+        }
+
+        const totalSeconds = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+        return totalSeconds;
+
+    } catch (error) {
+        console.error('⏰ Time parsing error:', error, 'for:', timeStr);
+        return null;
+    }
+}
+
+function parsePosition(positionStr) {
+    if (!positionStr) return null;
+
+    const position = {};
+
+    // Parse X1:40 X2:600 Y1:20 Y2:50 format
+    const xMatch = positionStr.match(/X1:(\d+)\s+X2:(\d+)/);
+    const yMatch = positionStr.match(/Y1:(\d+)\s+Y2:(\d+)/);
+
+    if (xMatch) {
+        position.x1 = parseInt(xMatch[1]);
+        position.x2 = parseInt(xMatch[2]);
+    }
+
+    if (yMatch) {
+        position.y1 = parseInt(yMatch[1]);
+        position.y2 = parseInt(yMatch[2]);
+    }
+
+    return Object.keys(position).length > 0 ? position : null;
+}
+
+// Enhanced subtitle display with HTML support
 function updateSubtitles(currentTime) {
     const subtitleOverlay = document.getElementById('subtitleOverlay');
     const subtitleText = document.getElementById('subtitleText');
@@ -2307,11 +2474,128 @@ function updateSubtitles(currentTime) {
     );
 
     if (currentEntry) {
-        subtitleText.textContent = currentEntry.text;
+        // Use HTML content if available and has formatting, otherwise use plain text
+        if (currentEntry.hasFormatting && currentEntry.html) {
+            subtitleText.innerHTML = currentEntry.html;
+        } else {
+            subtitleText.textContent = currentEntry.text;
+        }
+
+        // Apply positioning if available
+        applySubtitlePositioning(subtitleOverlay, currentEntry.position);
+
         subtitleOverlay.classList.add('show');
     } else {
         subtitleOverlay.classList.remove('show');
     }
+}
+
+function processSubtitleText(rawText) {
+    let hasFormatting = false;
+    let html = rawText;
+    let styles = {};
+
+    // Remove common prefixes like [spanish], [english], etc.
+    html = html.replace(/^\s*\[[^\]]+\]\s*/gm, '');
+
+    // Check if there's any HTML formatting
+    const htmlTagPattern = /<[^>]+>/;
+    if (htmlTagPattern.test(html)) {
+        hasFormatting = true;
+    }
+
+    // Process and convert HTML tags to proper format
+    html = processHTMLTags(html, styles);
+
+    // Get plain text version (no HTML tags)
+    const plainText = html.replace(/<[^>]*>/g, '').trim();
+
+    // Clean up whitespace
+    html = html.replace(/\s+/g, ' ').trim();
+
+    return {
+        plainText,
+        html,
+        styles,
+        hasFormatting
+    };
+}
+
+function processHTMLTags(text, styles) {
+    let processed = text;
+
+    // Process all supported HTML tags
+
+    // 1. Bold tags: <b>, <strong>
+    processed = processed.replace(/<(b|strong)(\s[^>]*)?>([^<]*)<\/(b|strong)>/gi, '<strong>$3</strong>');
+
+    // 2. Italic tags: <i>, <em>
+    processed = processed.replace(/<(i|em)(\s[^>]*)?>([^<]*)<\/(i|em)>/gi, '<em>$3</em>');
+
+    // 3. Underline tags
+    processed = processed.replace(/<u(\s[^>]*)?>([^<]*)<\/u>/gi, '<u>$2</u>');
+
+    // 4. Font color tags: <font color="#FF0000">, <font color="red">
+    processed = processed.replace(/<font\s+color=["']?([^"'>]+)["']?(\s[^>]*)?>([^<]*)<\/font>/gi,
+        '<span style="color: $1">$3</span>');
+
+    // 5. Font size tags
+    processed = processed.replace(/<font\s+size=["']?([^"'>]+)["']?(\s[^>]*)?>([^<]*)<\/font>/gi,
+        '<span style="font-size: $1">$3</span>');
+
+    // 6. Font face tags
+    processed = processed.replace(/<font\s+face=["']?([^"'>]+)["']?(\s[^>]*)?>([^<]*)<\/font>/gi,
+        '<span style="font-family: $1">$3</span>');
+
+    // 7. Complex font tags with multiple attributes
+    processed = processed.replace(/<font([^>]*)>([^<]*)<\/font>/gi, (match, attrs, content) => {
+        const styleAttrs = [];
+
+        const colorMatch = attrs.match(/color=["']?([^"'>]+)["']?/i);
+        if (colorMatch) styleAttrs.push(`color: ${colorMatch[1]}`);
+
+        const sizeMatch = attrs.match(/size=["']?([^"'>]+)["']?/i);
+        if (sizeMatch) styleAttrs.push(`font-size: ${sizeMatch[1]}`);
+
+        const faceMatch = attrs.match(/face=["']?([^"'>]+)["']?/i);
+        if (faceMatch) styleAttrs.push(`font-family: ${faceMatch[1]}`);
+
+        return styleAttrs.length > 0 ?
+            `<span style="${styleAttrs.join('; ')}">${content}</span>` :
+            content;
+    });
+
+    // 8. Style tags (direct CSS)
+    processed = processed.replace(/<span\s+style=["']([^"'>]+)["'](\s[^>]*)?>([^<]*)<\/span>/gi,
+        '<span style="$1">$3</span>');
+
+    // 9. Ruby text support (Japanese annotations)
+    // Keep ruby tags as-is, they're supported by modern browsers
+
+    // 10. Line breaks
+    processed = processed.replace(/<br\s*\/?>/gi, '<br>');
+
+    // 11. Clean up any remaining unsupported tags while preserving their content
+    processed = processed.replace(/<(?!\/?(strong|em|u|span|br|ruby|rt|rp)\b)[^>]*>([^<]*)<\/[^>]*>/gi, '$2');
+
+    // 12. Handle nested tags properly
+    processed = cleanupNestedTags(processed);
+
+    return processed;
+}
+
+function cleanupNestedTags(html) {
+    // Handle nested bold/italic combinations
+    html = html.replace(/<strong><em>([^<]*)<\/em><\/strong>/gi, '<strong><em>$1</em></strong>');
+    html = html.replace(/<em><strong>([^<]*)<\/strong><\/em>/gi, '<strong><em>$1</em></strong>');
+
+    // Clean up empty tags
+    html = html.replace(/<(strong|em|u|span)[^>]*><\/(strong|em|u|span)>/gi, '');
+
+    // Remove extra whitespace
+    html = html.replace(/\s+/g, ' ');
+
+    return html;
 }
 
 function toggleSubtitleModal() {
@@ -4165,5 +4449,44 @@ window.debugVideoLibrary = function() {
         console.log(`  ${i}: ${card.dataset.title} (ID: ${card.dataset.videoId})`);
     });
 };
+
+// Debug function for subtitle testing
+window.debugSubtitleParsing = function(srtContent) {
+    console.log('🔍 Testing SRT parsing...');
+    const parsed = parseSRT(srtContent);
+    console.log('Parsed entries:', parsed);
+
+    parsed.forEach((entry, i) => {
+        if (i < 5) { // Show first 5 entries
+            console.log(`Entry ${entry.index}:`, {
+                time: `${formatSecondsToTime(entry.startTime)} → ${formatSecondsToTime(entry.endTime)}`,
+                text: entry.text,
+                html: entry.html,
+                hasFormatting: entry.hasFormatting,
+                position: entry.position
+            });
+        }
+    });
+
+    return parsed;
+};
+
+// Test with your Spanish subtitle content
+window.testSpanishSubtitles = function() {
+    const testContent = `1
+00:00:01,769 --> 00:00:03,936
+<font color="red">[spanish]</font> Kim: I have a case in Tucumcari.
+
+2
+00:00:03,938 --> 00:00:05,587
+<i>And there's something I want to discuss with you.</i>
+
+3
+00:00:05,589 --> 00:00:07,197
+<b>I'm not representing Mesa Verde.</b>`;
+
+    return debugSubtitleParsing(testContent);
+};
+
 
 console.log('StreamHub JavaScript loaded successfully');
