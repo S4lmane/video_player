@@ -1337,6 +1337,8 @@ function playVideo(videoId) {
         return;
     }
 
+    checkForSavedSubtitles(currentVideo);
+
     console.log('Playing video:', currentVideo.title);
     document.getElementById('mainPage').style.display = 'none';
     document.getElementById('playerPage').style.display = 'block';
@@ -2775,17 +2777,33 @@ function handleSubtitleUpload(event) {
     console.log('Uploading subtitle file:', file.name);
     const reader = new FileReader();
     reader.onload = function(e) {
-        const parsed = parseSRT(e.target.result);
+        const subtitleContent = e.target.result;
+        const parsed = parseSRT(subtitleContent);
         const language = file.name.split('.')[0];
 
         if (!currentVideo.subtitles) {
             currentVideo.subtitles = [];
         }
 
-        const subtitleUrl = URL.createObjectURL(file);
+        // Save subtitle content to localStorage
+        const subtitleData = {
+            language: language,
+            content: subtitleContent,
+            videoId: currentVideo.id,
+            fileName: file.name,
+            uploadedAt: Date.now()
+        };
+
+        saveSubtitleToStorage(subtitleData);
+
+        // Create blob URL for the subtitle
+        const blob = new Blob([subtitleContent], { type: 'text/plain' });
+        const subtitleUrl = URL.createObjectURL(blob);
+
         currentVideo.subtitles.push({ language, url: subtitleUrl });
         currentSubtitles.push({ language, entries: parsed });
 
+        // Update the UI
         const subtitleOptions = document.getElementById('subtitleOptions');
         const option = document.createElement('div');
         option.className = 'subtitle-option';
@@ -2798,9 +2816,114 @@ function handleSubtitleUpload(event) {
 
         selectSubtitle({ language });
         event.target.value = '';
-        console.log('Subtitle uploaded and selected:', language);
+
+        showActionFeedback('subtitles', `${language} subtitle uploaded and saved`);
+        console.log('Subtitle uploaded, parsed, and saved:', language);
     };
     reader.readAsText(file);
+}
+
+// Save subtitle to localStorage
+function saveSubtitleToStorage(subtitleData) {
+    try {
+        const key = `subtitle_${subtitleData.videoId}_${subtitleData.language}`;
+        localStorage.setItem(key, JSON.stringify(subtitleData));
+
+        // Also maintain a list of all subtitle keys for cleanup
+        const subtitlesList = JSON.parse(localStorage.getItem('streamhub_subtitles_list') || '[]');
+        if (!subtitlesList.includes(key)) {
+            subtitlesList.push(key);
+            localStorage.setItem('streamhub_subtitles_list', JSON.stringify(subtitlesList));
+        }
+
+        console.log('Subtitle saved to storage:', key);
+    } catch (e) {
+        console.error('Failed to save subtitle to storage:', e);
+        if (e.name === 'QuotaExceededError') {
+            cleanupOldSubtitles();
+        }
+    }
+}
+
+// Load subtitles from localStorage
+function loadSubtitlesFromStorage(videoId) {
+    try {
+        const subtitlesList = JSON.parse(localStorage.getItem('streamhub_subtitles_list') || '[]');
+        const videoSubtitles = [];
+
+        subtitlesList.forEach(key => {
+            if (key.includes(`subtitle_${videoId}_`)) {
+                const subtitleData = localStorage.getItem(key);
+                if (subtitleData) {
+                    const parsed = JSON.parse(subtitleData);
+
+                    // Create blob URL from saved content
+                    const blob = new Blob([parsed.content], { type: 'text/plain' });
+                    const subtitleUrl = URL.createObjectURL(blob);
+
+                    videoSubtitles.push({
+                        language: parsed.language,
+                        url: subtitleUrl
+                    });
+
+                    console.log('Loaded subtitle from storage:', parsed.language);
+                }
+            }
+        });
+
+        return videoSubtitles;
+    } catch (e) {
+        console.error('Failed to load subtitles from storage:', e);
+        return [];
+    }
+}
+
+// Clean up old subtitles to free space
+function cleanupOldSubtitles() {
+    try {
+        const subtitlesList = JSON.parse(localStorage.getItem('streamhub_subtitles_list') || '[]');
+        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+
+        const validKeys = [];
+
+        subtitlesList.forEach(key => {
+            const subtitleData = localStorage.getItem(key);
+            if (subtitleData) {
+                const parsed = JSON.parse(subtitleData);
+                if (parsed.uploadedAt && parsed.uploadedAt > thirtyDaysAgo) {
+                    validKeys.push(key);
+                } else {
+                    localStorage.removeItem(key);
+                }
+            }
+        });
+
+        localStorage.setItem('streamhub_subtitles_list', JSON.stringify(validKeys));
+        console.log('Cleaned up old subtitles, kept', validKeys.length, 'subtitle files');
+    } catch (e) {
+        console.error('Failed to cleanup old subtitles:', e);
+    }
+}
+
+// Check and restore subtitles for a video
+function checkForSavedSubtitles(video) {
+    const savedSubtitles = loadSubtitlesFromStorage(video.id);
+
+    if (savedSubtitles.length > 0) {
+        if (!video.subtitles) {
+            video.subtitles = [];
+        }
+
+        // Add saved subtitles to the video
+        savedSubtitles.forEach(savedSub => {
+            // Check if this subtitle is already in the video's subtitles
+            const exists = video.subtitles.find(sub => sub.language === savedSub.language);
+            if (!exists) {
+                video.subtitles.push(savedSub);
+                console.log('Restored subtitle:', savedSub.language, 'for video:', video.title);
+            }
+        });
+    }
 }
 
 function handleSubtitleError(error, language) {
@@ -4441,6 +4564,14 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDragAndDrop();
     updatePlaybackModeUI();
     setupMiniPlayerDrag();
+
+    videoLibrary.forEach(video => {
+        checkForSavedSubtitles(video);
+    });
+
+    // Clean up old subtitles on startup
+    setTimeout(cleanupOldSubtitles, 1000);
+
     setupPlaybackModeButton();
     loadThumbnailData();
     observeCastModal();
@@ -4741,37 +4872,37 @@ function applySubtitlePosition(overlay, position) {
     // Apply positioning with subtle offsets that don't interfere with video
     switch(position) {
         case 'top-left':
-            overlay.style.top = '80px'; // Stay below header
-            overlay.style.left = '60px'; // Small offset from edge
+            overlay.style.top = '80px';        // ← CHANGE THIS: Distance from top
+            overlay.style.left = '60px';       // ← CHANGE THIS: Distance from left
             overlay.style.transform = 'none';
             break;
 
         case 'top-center':
-            overlay.style.top = '80px'; // Stay below header
+            overlay.style.top = '80px';        // ← CHANGE THIS: Distance from top
             overlay.style.left = '50%';
             overlay.style.transform = 'translateX(-50%)';
             break;
 
         case 'top-right':
-            overlay.style.top = '80px'; // Stay below header
-            overlay.style.right = '60px'; // Small offset from edge
+            overlay.style.top = '80px';        // ← CHANGE THIS: Distance from top
+            overlay.style.right = '60px';      // ← CHANGE THIS: Distance from right
             overlay.style.transform = 'none';
             break;
 
         case 'center-left':
             overlay.style.top = '50%';
-            overlay.style.left = '60px'; // Small offset from edge
+            overlay.style.left = '60px';       // ← CHANGE THIS: Distance from left
             overlay.style.transform = 'translateY(-50%)';
             break;
 
         case 'center-right':
             overlay.style.top = '50%';
-            overlay.style.right = '60px'; // Small offset from edge
+            overlay.style.right = '60px';      // ← CHANGE THIS: Distance from right
             overlay.style.transform = 'translateY(-50%)';
             break;
 
         default: // bottom-center and any other case
-            overlay.style.bottom = '180px'; // Stay above controls
+            overlay.style.bottom = '90px';    // ← CHANGE THIS: Distance from bottom
             overlay.style.left = '50%';
             overlay.style.transform = 'translateX(-50%)';
             break;
@@ -5334,6 +5465,27 @@ window.testSubtitleControls = function() {
     setTimeout(() => setSubtitlePosition('bottom-center'), 5000);
 
     console.log('All tests scheduled. Watch the console and subtitle display.');
+};
+
+// Debug function to see what subtitles are saved
+window.debugSavedSubtitles = function() {
+    const subtitlesList = JSON.parse(localStorage.getItem('streamhub_subtitles_list') || '[]');
+    console.log('=== SAVED SUBTITLES DEBUG ===');
+    console.log('Total saved subtitle files:', subtitlesList.length);
+
+    subtitlesList.forEach(key => {
+        const data = localStorage.getItem(key);
+        if (data) {
+            const parsed = JSON.parse(data);
+            console.log(`${key}:`, {
+                language: parsed.language,
+                videoId: parsed.videoId,
+                fileName: parsed.fileName,
+                uploadedAt: new Date(parsed.uploadedAt).toLocaleString(),
+                contentSize: Math.round(parsed.content.length / 1024) + 'KB'
+            });
+        }
+    });
 };
 
 

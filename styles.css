@@ -2995,38 +2995,91 @@ body {
 .subtitle-position-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    max-width: 120px;
+    gap: 0.75rem;
+    max-width: 150px;
+    margin: 0 auto;
 }
 
 .subtitle-position-btn {
     aspect-ratio: 1;
-    background: var(--accent);
+    background: linear-gradient(135deg, var(--accent), rgba(255, 255, 255, 0.05));
     border: 1px solid var(--border);
     color: var(--text-secondary);
     cursor: pointer;
-    border-radius: 6px;
-    transition: var(--transition);
+    border-radius: 8px;
+    transition: all 0.3s var(--spring);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.875rem;
+    font-size: 1rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.subtitle-position-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
 }
 
 .subtitle-position-btn:hover {
-    background: var(--accent-hover);
+    background: linear-gradient(135deg, var(--accent-hover), rgba(255, 255, 255, 0.1));
     border-color: var(--secondary);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
+}
+
+.subtitle-position-btn:hover::before {
+    transform: translateX(100%);
 }
 
 .subtitle-position-btn.active {
-    background: var(--secondary);
+    background: linear-gradient(135deg, var(--secondary), rgba(255, 255, 255, 0.9));
     color: var(--primary);
     border-color: var(--secondary);
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+}
+
+.subtitle-position-btn.active .material-icons {
+    font-weight: bold;
 }
 
 .subtitle-sync-controls {
     display: flex;
     gap: 0.5rem;
+}
+
+.subtitle-position-btn.active::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(45deg, var(--secondary), transparent, var(--secondary));
+    border-radius: 10px;
+    z-index: -1;
+    animation: activeGlow 2s ease-in-out infinite;
+}
+
+@keyframes activeGlow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* Improve the overall settings group */
+.subtitle-settings-group {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.subtitle-settings-group:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
 }
 
 .subtitle-sync-btn {
