@@ -32,6 +32,27 @@
 
     <!-- File inputs -->
     <input type="file" id="thumbnailInput" class="file-input" accept="image/*" onchange="handleThumbnailUpload(event)">
+        <!-- Search Modal -->
+    <div class="search-modal" id="searchModal">
+        <div class="search-container">
+            <div class="search-header">
+                <input type="text" class="search-input" id="searchInput" placeholder="Search videos or add new content..." autocomplete="off">
+                <button class="search-close" onclick="hideSearchModal()">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="search-results" id="searchResults"></div>
+            <div class="search-actions" id="searchActions" style="display: none;">
+                <button class="search-action-btn" onclick="addVideoFromSearch()">
+                    <span class="material-icons">add</span>
+                    Add Video
+                </button>
+                <button class="search-action-btn secondary" onclick="clearSearch()">
+                    Clear
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Page -->
     <div class="main-page" id="mainPage">
@@ -40,12 +61,10 @@
                 <span class="material-icons">play_circle</span>
                 <span>StreamHub</span>
             </div>
-            <div class="add-section">
-                <input type="text" class="add-input" id="videoInput" placeholder="Add video title or paste video URL...">
-                <button class="add-btn" onclick="addVideo()">
-                    <span class="material-icons">add</span>
-                    Add Video
-                </button>
+            <div class="search-trigger" onclick="showSearchModal()">
+                <span class="material-icons">search</span>
+                <span>Search videos or add new...</span>
+                <span class="search-shortcut" id="searchShortcut">⌘F</span>
             </div>
             <div class="header-right">
                 <button class="shortcuts-btn" onclick="showShortcuts()">
@@ -104,25 +123,107 @@
             </div>
 
             <!-- subtitle modal -->
+            <!-- Enhanced Subtitle Modal -->
             <div class="subtitle-modal" id="subtitleModal">
                 <div class="subtitle-modal-header">
-                    <h3 class="subtitle-modal-title">Subtitles</h3>
-                    <button class="subtitle-close-btn" onclick="hideSubtitleModal()">
-                        <span class="material-icons">close</span>
-                    </button>
-                </div>
-                <div class="subtitle-options" id="subtitleOptions">
-                    <div class="subtitle-option active" onclick="selectSubtitle(null)">
-                        <span class="subtitle-option-text">Off</span>
-                        <span class="subtitle-check material-icons">check</span>
+                    <h3 class="subtitle-modal-title">
+                        <span class="material-icons">subtitles</span>
+                        Subtitles
+                    </h3>
+                    <div class="subtitle-controls">
+                        <button class="subtitle-settings-btn" id="subtitleSettingsBtn" onclick="toggleSubtitleSettings()">
+                            <span class="material-icons">settings</span>
+                        </button>
+                        <button class="subtitle-close-btn" onclick="hideSubtitleModal()">
+                            <span class="material-icons">close</span>
+                        </button>
                     </div>
                 </div>
-                <div class="subtitle-upload">
-                    <input type="file" id="subtitleFileInput" accept=".srt" style="display: none;" onchange="handleSubtitleUpload(event)">
-                    <button class="subtitle-upload-btn" onclick="document.getElementById('subtitleFileInput').click()">
-                        <span class="material-icons" style="font-size: 0.875rem; margin-right: 0.5rem;">upload</span>
-                        Upload SRT File
-                    </button>
+
+                <div class="subtitle-content">
+                    <div class="subtitle-options" id="subtitleOptions">
+                        <!-- Options populated by JS -->
+                    </div>
+
+                    <div class="subtitle-settings" id="subtitleSettings">
+                        <div class="subtitle-settings-group">
+                            <label class="subtitle-settings-label">Font Size</label>
+                            <div class="subtitle-control-row">
+                                <button class="subtitle-adjust-btn" onclick="adjustSubtitleSize(-2)">
+                                    <span class="material-icons">remove</span>
+                                </button>
+                                <input type="number" class="subtitle-input" id="subtitleFontSize" value="24" min="12" max="48">
+                                <button class="subtitle-adjust-btn" onclick="adjustSubtitleSize(2)">
+                                    <span class="material-icons">add</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="subtitle-settings-group">
+                            <label class="subtitle-settings-label">Text Color</label>
+                            <div class="color-picker-container">
+                                <input type="color" class="color-picker" id="subtitleColor" value="#ffffff" onchange="updateSubtitleStyle()">
+                                <span class="subtitle-input" style="flex: none; width: auto; padding: 0.5rem;">Text</span>
+                            </div>
+                        </div>
+
+                        <div class="subtitle-settings-group">
+                            <label class="subtitle-settings-label">Background</label>
+                            <div class="color-picker-container">
+                                <input type="color" class="color-picker" id="subtitleBgColor" value="#000000" onchange="updateSubtitleStyle()">
+                                <input type="range" class="subtitle-input" id="subtitleBgOpacity" min="0" max="100" value="80" onchange="updateSubtitleStyle()">
+                            </div>
+                        </div>
+
+                        <div class="subtitle-settings-group">
+                            <label class="subtitle-settings-label">Position</label>
+                            <div class="subtitle-position-grid">
+                                <button class="subtitle-position-btn" data-position="top-left" onclick="setSubtitlePosition('top-left')">
+                                    <span class="material-icons">north_west</span>
+                                </button>
+                                <button class="subtitle-position-btn" data-position="top-center" onclick="setSubtitlePosition('top-center')">
+                                    <span class="material-icons">north</span>
+                                </button>
+                                <button class="subtitle-position-btn" data-position="top-right" onclick="setSubtitlePosition('top-right')">
+                                    <span class="material-icons">north_east</span>
+                                </button>
+                                <button class="subtitle-position-btn" data-position="center-left" onclick="setSubtitlePosition('center-left')">
+                                    <span class="material-icons">west</span>
+                                </button>
+                                <button class="subtitle-position-btn active" data-position="bottom-center" onclick="setSubtitlePosition('bottom-center')">
+                                    <span class="material-icons">south</span>
+                                </button>
+                                <button class="subtitle-position-btn" data-position="center-right" onclick="setSubtitlePosition('center-right')">
+                                    <span class="material-icons">east</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="subtitle-settings-group">
+                            <label class="subtitle-settings-label">Sync Adjustment</label>
+                            <div class="subtitle-sync-controls">
+                                <button class="subtitle-sync-btn backward" onclick="adjustSubtitleSync(-0.5)">
+                                    <span class="material-icons">fast_rewind</span>
+                                    -0.5s
+                                </button>
+                                <button class="subtitle-sync-btn forward" onclick="adjustSubtitleSync(0.5)">
+                                    <span class="material-icons">fast_forward</span>
+                                    +0.5s
+                                </button>
+                            </div>
+                            <div style="text-align: center; margin-top: 0.5rem;">
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">Offset: <span id="subtitleOffset">0.0s</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="subtitle-upload">
+                        <input type="file" id="subtitleFileInput" accept=".srt" style="display: none;" onchange="handleSubtitleUpload(event)">
+                        <button class="subtitle-upload-btn" onclick="document.getElementById('subtitleFileInput').click()">
+                            <span class="material-icons">upload</span>
+                            Upload SRT File
+                        </button>
+                    </div>
                 </div>
             </div>
 

@@ -62,6 +62,28 @@ let videoLibrary = [
         subtitles: [
             { language: "English", url: "./subtitles/[cc-eng] Whiplash.srt" }
         ]
+    },
+    {
+        id: 7,
+        title: "The Night Manager",
+        duration: "3:20",
+        type: "MP4",
+        url: "./videos/TNM - Ep1.mp4",
+        thumbnail: "./videos/TNM.jpg",
+        subtitles: [
+            { language: "English", url: "./subtitles/TNM - Ep1.srt" }
+        ]
+    },
+    {
+        id: 8,
+        title: "The Night Manager",
+        duration: "3:20",
+        type: "MP4",
+        url: "./videos/TNM - Ep1.mp4",
+        thumbnail: "./videos/TNM2.jpg",
+        subtitles: [
+            { language: "English", url: "./subtitles/TNM - Ep1.srt" }
+        ]
     }
 ];
 
@@ -316,9 +338,8 @@ function addVideo() {
         videoTitle = value;
     }
 
-    // Create a completely new video object with unique ID
     const newVideo = {
-        id: Date.now() + Math.floor(Math.random() * 1000), // Ensure unique ID
+        id: Date.now() + Math.floor(Math.random() * 1000),
         title: videoTitle,
         duration: "Unknown",
         type: videoUrl.split('.').pop().toUpperCase(),
@@ -327,13 +348,15 @@ function addVideo() {
         subtitles: null
     };
 
-    // Add to array using spread operator to avoid reference issues
     videoLibrary = [...videoLibrary, newVideo];
+
+    // Save thumbnails after adding video
+    saveThumbnailData();
 
     input.value = '';
     loadLibrary();
     updateVideoCount();
-    verifyArrayIntegrity(); // Debug check
+    verifyArrayIntegrity();
     console.log('New video added:', newVideo.title);
 }
 
@@ -454,7 +477,7 @@ function hideContextMenu() {
     });
 
     isContextMenuOpen = false;
-    selectedVideoId = null;
+    // selectedVideoId = null; @fix this
     console.log('Context menu hidden');
 }
 
@@ -493,6 +516,10 @@ function handleThumbnailUpload(event) {
         const video = videoLibrary.find(v => v.id === selectedVideoId);
         if (video) {
             video.thumbnail = e.target.result;
+
+            // Save thumbnails immediately after setting
+            saveThumbnailData();
+
             loadLibrary();
             updateVideoCount();
 
@@ -501,12 +528,87 @@ function handleThumbnailUpload(event) {
                 miniArtwork.innerHTML = `<img src="${e.target.result}" alt="${video.title}">`;
                 updateMiniInfo();
             }
-            console.log('Thumbnail updated for video:', video.title);
+
+            console.log('Thumbnail updated and saved for video:', video.title);
+            showActionFeedback('image', 'Thumbnail updated');
             selectedVideoId = null;
         }
     };
     reader.readAsDataURL(file);
     event.target.value = '';
+}
+
+function saveThumbnailData() {
+    try {
+        const thumbnailData = {};
+        videoLibrary.forEach(video => {
+            if (video.thumbnail && video.thumbnail.startsWith('data:')) {
+                const videoKey = getVideoKey(video);
+                thumbnailData[videoKey] = {
+                    thumbnail: video.thumbnail,
+                    title: video.title,
+                    duration: video.duration,
+                    type: video.type,
+                    savedAt: Date.now()
+                };
+            }
+        });
+        localStorage.setItem('streamhub_thumbnails', JSON.stringify(thumbnailData));
+        console.log('Thumbnails saved for', Object.keys(thumbnailData).length, 'videos');
+    } catch (e) {
+        console.error('Failed to save thumbnail data:', e);
+        if (e.name === 'QuotaExceededError') {
+            console.warn('Storage quota exceeded, clearing old thumbnails');
+            // Clear thumbnails older than 30 days
+            clearOldThumbnails();
+        }
+    }
+}
+
+function loadThumbnailData() {
+    try {
+        const saved = localStorage.getItem('streamhub_thumbnails');
+        if (saved) {
+            const thumbnailData = JSON.parse(saved);
+            console.log('Loading thumbnails for', Object.keys(thumbnailData).length, 'videos');
+
+            videoLibrary.forEach(video => {
+                const videoKey = getVideoKey(video);
+                if (thumbnailData[videoKey]) {
+                    video.thumbnail = thumbnailData[videoKey].thumbnail;
+                    console.log('Loaded thumbnail for:', video.title);
+                }
+            });
+
+            console.log('Thumbnails loaded successfully');
+        }
+    } catch (e) {
+        console.error('Failed to load thumbnail data:', e);
+        localStorage.removeItem('streamhub_thumbnails');
+    }
+}
+function clearOldThumbnails() {
+    try {
+        const saved = localStorage.getItem('streamhub_thumbnails');
+        if (saved) {
+            const thumbnailData = JSON.parse(saved);
+            const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+
+            const cleanedData = {};
+            Object.keys(thumbnailData).forEach(key => {
+                const data = thumbnailData[key];
+                if (data.savedAt && data.savedAt > thirtyDaysAgo) {
+                    cleanedData[key] = data;
+                }
+            });
+
+            localStorage.setItem('streamhub_thumbnails', JSON.stringify(cleanedData));
+            console.log('Cleaned old thumbnails, kept', Object.keys(cleanedData).length, 'thumbnails');
+        }
+    } catch (e) {
+        console.error('Failed to clean old thumbnails:', e);
+        localStorage.removeItem('streamhub_thumbnails');
+    }
 }
 
 // Move Video Functions
@@ -2459,7 +2561,44 @@ function parsePosition(positionStr) {
     return Object.keys(position).length > 0 ? position : null;
 }
 
+// Create unique key for video identification
+function getVideoKey(video) {
+    // Use title + duration + type as unique identifier
+    const cleanTitle = video.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanDuration = video.duration.replace(/[^0-9:]/g, '');
+    return `${cleanTitle}_${cleanDuration}_${video.type.toLowerCase()}`;
+}
+
 // Enhanced subtitle display with HTML support
+// function updateSubtitles(currentTime) {
+//     const subtitleOverlay = document.getElementById('subtitleOverlay');
+//     const subtitleText = document.getElementById('subtitleText');
+
+//     if (!currentSubtitleTrack || !currentSubtitleTrack.entries) {
+//         subtitleOverlay.classList.remove('show');
+//         return;
+//     }
+
+//     const currentEntry = currentSubtitleTrack.entries.find(
+//         entry => currentTime >= entry.startTime && currentTime <= entry.endTime
+//     );
+
+//     if (currentEntry) {
+//         // Use HTML content if available and has formatting, otherwise use plain text
+//         if (currentEntry.hasFormatting && currentEntry.html) {
+//             subtitleText.innerHTML = currentEntry.html;
+//         } else {
+//             subtitleText.textContent = currentEntry.text;
+//         }
+
+//         // Apply positioning if available
+//         applySubtitlePositioning(subtitleOverlay, currentEntry.position);
+
+//         subtitleOverlay.classList.add('show');
+//     } else {
+//         subtitleOverlay.classList.remove('show');
+//     }
+// }
 function updateSubtitles(currentTime) {
     const subtitleOverlay = document.getElementById('subtitleOverlay');
     const subtitleText = document.getElementById('subtitleText');
@@ -2469,8 +2608,11 @@ function updateSubtitles(currentTime) {
         return;
     }
 
+    // Apply sync offset
+    const adjustedTime = currentTime - (subtitleSettings.syncOffset || 0);
+
     const currentEntry = currentSubtitleTrack.entries.find(
-        entry => currentTime >= entry.startTime && currentTime <= entry.endTime
+        entry => adjustedTime >= entry.startTime && adjustedTime <= entry.endTime
     );
 
     if (currentEntry) {
@@ -2481,8 +2623,18 @@ function updateSubtitles(currentTime) {
             subtitleText.textContent = currentEntry.text;
         }
 
-        // Apply positioning if available
-        applySubtitlePositioning(subtitleOverlay, currentEntry.position);
+        // Apply current subtitle styles EVERY TIME
+        const text = document.getElementById('subtitleText');
+        if (text && subtitleSettings) {
+            text.style.fontSize = subtitleSettings.fontSize + 'px';
+            text.style.color = subtitleSettings.color;
+
+            const opacityHex = Math.round(subtitleSettings.backgroundOpacity * 2.55).toString(16).padStart(2, '0');
+            text.style.backgroundColor = subtitleSettings.backgroundColor + opacityHex;
+        }
+
+        // Apply positioning EVERY TIME
+        applySubtitlePosition(subtitleOverlay, subtitleSettings.position);
 
         subtitleOverlay.classList.add('show');
     } else {
@@ -3185,32 +3337,31 @@ function handleSpaceBarToggle() {
 }
 
 function handlePKeyToggle() {
-    console.log('=== P KEY TOGGLE ===');
-    console.log('isMiniPlayerMode:', isMiniPlayerMode);
-    console.log('currentVideo:', currentVideo ? currentVideo.title : 'None');
-
     const playerPageVisible = document.getElementById('playerPage').style.display !== 'none';
-    console.log('playerPageVisible:', playerPageVisible);
+    const wasFullscreen = !!document.fullscreenElement;
 
     if (isMiniPlayerMode) {
-        // Currently in mini player mode - expand to full player
-        console.log('📱→🖥️ Expanding mini player to full player');
+        // Expanding to full player - restore fullscreen if it was active
         expandMiniPlayer();
-        showActionFeedback('open_in_full', 'Expanded to Full Player');
+        if (wasFullscreen) {
+            setTimeout(() => {
+                const playerContainer = document.getElementById('playerContainer');
+                playerContainer.requestFullscreen().catch(err => {
+                    console.error('Failed to restore fullscreen:', err);
+                });
+            }, 100);
+        }
     } else if (playerPageVisible && currentVideo) {
-        // Currently in full player mode - minimize to mini player
-        console.log('🖥️→📱 Minimizing to mini player');
-        enableMiniPlayer();
-        showActionFeedback('widgets', 'Minimized to Mini Player');
-    } else if (currentVideo) {
-        // Video exists but not in player mode - go to full player
-        console.log('📂→🖥️ Opening video in full player');
-        playVideo(currentVideo.id);
-        showActionFeedback('play_circle', 'Opened in Full Player');
-    } else {
-        // No video available
-        console.log('❌ No video available to toggle');
-        showActionFeedback('error', 'No video available');
+        // Exit fullscreen before enabling mini player
+        if (document.fullscreenElement) {
+            document.exitFullscreen().then(() => {
+                setTimeout(() => {
+                    enableMiniPlayer();
+                }, 100);
+            });
+        } else {
+            enableMiniPlayer();
+        }
     }
 }
 
@@ -4237,9 +4388,49 @@ function testAllAnimations() {
     testplayerani('normal', 'loopall');
 }
 
+const searchInput = document.getElementById('searchInput');
+if (searchInput) {
+    searchInput.addEventListener('input', function(e) {
+        performSearch(e.target.value);
+        selectedSearchIndex = 0;
+    });
+}
+
 // Initialize App
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Initializing StreamHub...');
+
+    // susbtitle start
+    loadSubtitleSettings();
+
+    // Set up subtitle input event listeners
+    setTimeout(() => {
+        const fontSizeInput = document.getElementById('subtitleFontSize');
+        const colorInput = document.getElementById('subtitleColor');
+        const bgColorInput = document.getElementById('subtitleBgColor');
+        const opacityInput = document.getElementById('subtitleBgOpacity');
+
+        if (fontSizeInput) {
+            fontSizeInput.addEventListener('input', onSubtitleInputChange);
+            fontSizeInput.addEventListener('change', onSubtitleInputChange);
+        }
+        if (colorInput) {
+            colorInput.addEventListener('change', onSubtitleInputChange);
+        }
+        if (bgColorInput) {
+            bgColorInput.addEventListener('change', onSubtitleInputChange);
+        }
+        if (opacityInput) {
+            opacityInput.addEventListener('input', onSubtitleInputChange);
+            opacityInput.addEventListener('change', onSubtitleInputChange);
+        }
+
+        console.log('Subtitle input event listeners set up');
+    }, 200);
+    // susbtitle end
+
+    initializeSearchSystem();
+    setupSearchKeyboardShortcuts();
     loadProgressData();
     loadLibrary();
     updateVideoCount();
@@ -4251,6 +4442,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePlaybackModeUI();
     setupMiniPlayerDrag();
     setupPlaybackModeButton();
+    loadThumbnailData();
     observeCastModal();
     initializePictureInPicture();
     setTimeout(() => {
@@ -4381,6 +4573,613 @@ function initializeMiniPlayerDrag() {
     });
 });
 
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+// Subtitle settings variables
+let subtitleSettings = {
+    fontSize: 24,
+    color: '#ffffff',
+    backgroundColor: '#000000',
+    backgroundOpacity: 80,
+    position: 'bottom-center',
+    syncOffset: 0
+};
+
+function toggleSubtitleSettings() {
+    const settings = document.getElementById('subtitleSettings');
+    if (settings.classList.contains('show')) {
+        settings.classList.remove('show');
+    } else {
+        settings.classList.add('show');
+        loadSubtitleSettings();
+    }
+}
+
+function loadSubtitleSettings() {
+    // Load from localStorage if available
+    try {
+        const saved = localStorage.getItem('streamhub_subtitle_settings');
+        if (saved) {
+            const settings = JSON.parse(saved);
+            subtitleSettings = { ...subtitleSettings, ...settings };
+        }
+    } catch (e) {
+        console.error('Failed to load subtitle settings:', e);
+    }
+
+    // Update UI elements
+    const fontSizeInput = document.getElementById('subtitleFontSize');
+    const colorInput = document.getElementById('subtitleColor');
+    const bgColorInput = document.getElementById('subtitleBgColor');
+    const opacityInput = document.getElementById('subtitleBgOpacity');
+    const offsetDisplay = document.getElementById('subtitleOffset');
+
+    if (fontSizeInput) fontSizeInput.value = subtitleSettings.fontSize;
+    if (colorInput) colorInput.value = subtitleSettings.color;
+    if (bgColorInput) bgColorInput.value = subtitleSettings.backgroundColor;
+    if (opacityInput) opacityInput.value = subtitleSettings.backgroundOpacity;
+    if (offsetDisplay) offsetDisplay.textContent = subtitleSettings.syncOffset.toFixed(1) + 's';
+
+    // Update position buttons
+    document.querySelectorAll('.subtitle-position-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.position === subtitleSettings.position) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+function adjustSubtitleSize(change) {
+    console.log('Adjusting font size by:', change);
+
+    const input = document.getElementById('subtitleFontSize');
+    if (!input) {
+        console.error('Font size input not found');
+        return;
+    }
+
+    const currentValue = parseInt(input.value) || 24;
+    const newValue = Math.max(12, Math.min(48, currentValue + change));
+
+    console.log('Font size change:', currentValue, '->', newValue);
+
+    input.value = newValue;
+    subtitleSettings.fontSize = newValue;
+
+    // Apply immediately and save
+    updateSubtitleStyle();
+    saveSubtitleSettings();
+
+    showActionFeedback('text_fields', `Font size: ${newValue}px`);
+}
+
+function adjustSubtitleSync(offset) {
+    console.log('Adjusting subtitle sync by:', offset);
+
+    subtitleSettings.syncOffset += offset;
+
+    console.log('New sync offset:', subtitleSettings.syncOffset);
+
+    const offsetDisplay = document.getElementById('subtitleOffset');
+    if (offsetDisplay) {
+        offsetDisplay.textContent = subtitleSettings.syncOffset.toFixed(1) + 's';
+    }
+
+    saveSubtitleSettings();
+    showActionFeedback('sync', `Sync: ${subtitleSettings.syncOffset >= 0 ? '+' : ''}${subtitleSettings.syncOffset.toFixed(1)}s`);
+}
+
+function setSubtitlePosition(position) {
+    console.log('Setting subtitle position to:', position);
+
+    subtitleSettings.position = position;
+
+    // Update button states immediately
+    document.querySelectorAll('.subtitle-position-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.position === position) {
+            btn.classList.add('active');
+        }
+    });
+
+    // Apply position immediately and save
+    updateSubtitleStyle();
+    saveSubtitleSettings();
+
+    showActionFeedback('subtitles', `Position: ${position.replace('-', ' ')}`);
+}
+
+function updateSubtitleStyle() {
+    const overlay = document.getElementById('subtitleOverlay');
+    const text = document.getElementById('subtitleText');
+
+    if (!overlay || !text) return;
+
+    // Get values from inputs if they exist
+    const fontSizeInput = document.getElementById('subtitleFontSize');
+    const colorInput = document.getElementById('subtitleColor');
+    const bgColorInput = document.getElementById('subtitleBgColor');
+    const opacityInput = document.getElementById('subtitleBgOpacity');
+
+    if (fontSizeInput && fontSizeInput.value) {
+        subtitleSettings.fontSize = parseInt(fontSizeInput.value);
+    }
+    if (colorInput && colorInput.value) {
+        subtitleSettings.color = colorInput.value;
+    }
+    if (bgColorInput && bgColorInput.value) {
+        subtitleSettings.backgroundColor = bgColorInput.value;
+    }
+    if (opacityInput && opacityInput.value) {
+        subtitleSettings.backgroundOpacity = parseInt(opacityInput.value);
+    }
+
+    // Apply styles to text element
+    text.style.fontSize = subtitleSettings.fontSize + 'px';
+    text.style.color = subtitleSettings.color;
+
+    // Convert opacity to hex
+    const opacityHex = Math.round(subtitleSettings.backgroundOpacity * 2.55).toString(16).padStart(2, '0');
+    text.style.backgroundColor = subtitleSettings.backgroundColor + opacityHex;
+
+    // Apply positioning with persistence
+    applySubtitlePosition(overlay, subtitleSettings.position);
+
+    console.log('Subtitle style updated:', subtitleSettings);
+}
+
+function applySubtitlePosition(overlay, position) {
+    // Reset all positioning
+    overlay.style.left = '';
+    overlay.style.right = '';
+    overlay.style.top = '';
+    overlay.style.bottom = '';
+    overlay.style.transform = '';
+    overlay.style.maxWidth = '80%';
+
+    // Apply positioning with subtle offsets that don't interfere with video
+    switch(position) {
+        case 'top-left':
+            overlay.style.top = '80px'; // Stay below header
+            overlay.style.left = '60px'; // Small offset from edge
+            overlay.style.transform = 'none';
+            break;
+
+        case 'top-center':
+            overlay.style.top = '80px'; // Stay below header
+            overlay.style.left = '50%';
+            overlay.style.transform = 'translateX(-50%)';
+            break;
+
+        case 'top-right':
+            overlay.style.top = '80px'; // Stay below header
+            overlay.style.right = '60px'; // Small offset from edge
+            overlay.style.transform = 'none';
+            break;
+
+        case 'center-left':
+            overlay.style.top = '50%';
+            overlay.style.left = '60px'; // Small offset from edge
+            overlay.style.transform = 'translateY(-50%)';
+            break;
+
+        case 'center-right':
+            overlay.style.top = '50%';
+            overlay.style.right = '60px'; // Small offset from edge
+            overlay.style.transform = 'translateY(-50%)';
+            break;
+
+        default: // bottom-center and any other case
+            overlay.style.bottom = '180px'; // Stay above controls
+            overlay.style.left = '50%';
+            overlay.style.transform = 'translateX(-50%)';
+            break;
+    }
+
+    console.log('Applied subtitle position:', position);
+}
+
+function saveSubtitleSettings() {
+    try {
+        localStorage.setItem('streamhub_subtitle_settings', JSON.stringify(subtitleSettings));
+        console.log('Subtitle settings saved:', subtitleSettings);
+    } catch (e) {
+        console.error('Failed to save subtitle settings:', e);
+    }
+}
+
+// Input change handler
+function onSubtitleInputChange() {
+    console.log('Subtitle input changed');
+    updateSubtitleStyle();
+    saveSubtitleSettings();
+}
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+// Search System Variables
+let searchResults = [];
+let selectedSearchIndex = 0;
+let searchQuery = '';
+
+// Initialize search system
+function initializeSearchSystem() {
+    // Detect OS for keyboard shortcut display
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const shortcutElement = document.getElementById('searchShortcut');
+    if (shortcutElement) {
+        shortcutElement.textContent = isMac ? '⌘⇧K' : 'Ctrl+Shift+K';
+    }
+}
+
+// Show search modal
+function showSearchModal() {
+    const modal = document.getElementById('searchModal');
+    const input = document.getElementById('searchInput');
+
+    modal.classList.add('show');
+    setTimeout(() => {
+        input.focus();
+    }, 100);
+
+    // Load initial results (show all videos)
+    performSearch('');
+}
+
+// Hide search modal
+function hideSearchModal() {
+    const modal = document.getElementById('searchModal');
+    const input = document.getElementById('searchInput');
+
+    modal.classList.remove('show');
+    input.value = '';
+    searchQuery = '';
+    selectedSearchIndex = 0;
+}
+
+// Perform smart search
+function performSearch(query) {
+    searchQuery = query.toLowerCase().trim();
+    searchResults = [];
+
+    if (searchQuery === '') {
+        // Show all videos when no query
+        searchResults = videoLibrary.map((video, index) => ({
+            type: 'video',
+            video: video,
+            index: index,
+            score: 0,
+            matchType: 'all'
+        }));
+    } else {
+        // Search through video library
+        videoLibrary.forEach((video, index) => {
+            const titleMatch = video.title.toLowerCase().includes(searchQuery);
+            const typeMatch = video.type.toLowerCase().includes(searchQuery);
+            const durationMatch = video.duration.includes(searchQuery);
+
+            if (titleMatch || typeMatch || durationMatch) {
+                let score = 0;
+                let matchType = '';
+
+                if (video.title.toLowerCase().startsWith(searchQuery)) {
+                    score += 100;
+                    matchType = 'title-start';
+                } else if (titleMatch) {
+                    score += 50;
+                    matchType = 'title';
+                } else if (typeMatch) {
+                    score += 25;
+                    matchType = 'type';
+                } else if (durationMatch) {
+                    score += 10;
+                    matchType = 'duration';
+                }
+
+                searchResults.push({
+                    type: 'video',
+                    video: video,
+                    index: index,
+                    score: score,
+                    matchType: matchType
+                });
+            }
+        });
+
+        // Sort by relevance score
+        searchResults.sort((a, b) => b.score - a.score);
+
+        // Add "Add new video" option if query doesn't match exactly
+        const exactMatch = videoLibrary.find(v =>
+            v.title.toLowerCase() === searchQuery
+        );
+
+        if (!exactMatch && searchQuery.length > 0) {
+            searchResults.unshift({
+                type: 'add',
+                query: query,
+                score: 1000,
+                matchType: 'add'
+            });
+        }
+    }
+
+    renderSearchResults();
+}
+
+// Render search results
+function renderSearchResults() {
+    const container = document.getElementById('searchResults');
+    const actionsContainer = document.getElementById('searchActions');
+
+    if (searchResults.length === 0) {
+        container.innerHTML = `
+            <div class="search-empty">
+                <div class="search-empty-icon">🔍</div>
+                <div class="search-empty-title">No results found</div>
+                <div>Try searching with different keywords</div>
+                <div class="search-shortcuts">
+                    <span class="search-shortcut-item">Enter</span>
+                    <span>to add as new video</span>
+                </div>
+            </div>
+        `;
+        actionsContainer.style.display = searchQuery ? 'flex' : 'none';
+        return;
+    }
+
+    let html = '';
+
+    // Group results by type
+    const videoResults = searchResults.filter(r => r.type === 'video');
+    const addResults = searchResults.filter(r => r.type === 'add');
+
+    // Add new video section
+    if (addResults.length > 0) {
+        html += `
+            <div class="search-section">
+                <div class="search-section-title">
+                    <span class="material-icons">add</span>
+                    Add New
+                </div>
+                <div class="search-results">
+        `;
+
+        addResults.forEach((result, index) => {
+            const isSelected = index === selectedSearchIndex;
+            html += `
+                <div class="search-result-item ${isSelected ? 'selected' : ''}"
+                     onclick="selectSearchResult(${index})"
+                     data-index="${index}">
+                    <div class="search-result-thumbnail">
+                        <span class="material-icons">add</span>
+                    </div>
+                    <div class="search-result-info">
+                        <div class="search-result-title">Add "${highlightMatch(result.query, searchQuery)}"</div>
+                        <div class="search-result-meta">
+                            <span class="search-result-badge">New Video</span>
+                            <span>Add to your library</span>
+                        </div>
+                    </div>
+                    <div class="search-result-action">
+                        <span class="material-icons">arrow_forward</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div></div>';
+    }
+
+    // Video results section
+    if (videoResults.length > 0) {
+        html += `
+            <div class="search-section">
+                <div class="search-section-title">
+                    <span class="material-icons">movie</span>
+                    Your Library (${videoResults.length})
+                </div>
+                <div class="search-results">
+        `;
+
+        videoResults.forEach((result, index) => {
+            const actualIndex = addResults.length + index;
+            const isSelected = actualIndex === selectedSearchIndex;
+            const video = result.video;
+
+            html += `
+                <div class="search-result-item ${isSelected ? 'selected' : ''}"
+                     onclick="selectSearchResult(${actualIndex})"
+                     data-index="${actualIndex}">
+                    <div class="search-result-thumbnail">
+                        ${video.thumbnail ?
+                          `<img src="${video.thumbnail}" alt="${video.title}">` :
+                          `<span class="material-icons">movie</span>`
+                        }
+                    </div>
+                    <div class="search-result-info">
+                        <div class="search-result-title">${highlightMatch(video.title, searchQuery)}</div>
+                        <div class="search-result-meta">
+                            <span class="search-result-badge">${video.type}</span>
+                            <span>${video.duration}</span>
+                            <span>${getMatchTypeLabel(result.matchType)}</span>
+                        </div>
+                    </div>
+                    <div class="search-result-action">
+                        <span class="material-icons">play_arrow</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div></div>';
+    }
+
+    container.innerHTML = html;
+    actionsContainer.style.display = 'none';
+}
+
+// Highlight matching text
+function highlightMatch(text, query) {
+    if (!query) return text;
+
+    const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+    return text.replace(regex, '<span class="search-highlight">$1</span>');
+}
+
+// Escape special regex characters
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Get match type label
+function getMatchTypeLabel(matchType) {
+    switch(matchType) {
+        case 'title-start': return 'Title match';
+        case 'title': return 'In title';
+        case 'type': return 'File type';
+        case 'duration': return 'Duration';
+        default: return '';
+    }
+}
+
+// Select search result
+function selectSearchResult(index) {
+    selectedSearchIndex = index;
+    updateSearchSelection();
+}
+
+// Update search selection visual
+function updateSearchSelection() {
+    document.querySelectorAll('.search-result-item').forEach((item, index) => {
+        item.classList.toggle('selected', index === selectedSearchIndex);
+    });
+}
+
+// Execute selected search result
+function executeSearchResult() {
+    if (searchResults.length === 0) {
+        if (searchQuery.trim()) {
+            addVideoFromSearch();
+        }
+        return;
+    }
+
+    const result = searchResults[selectedSearchIndex];
+
+    if (result.type === 'add') {
+        addVideoFromSearch();
+    } else if (result.type === 'video') {
+        hideSearchModal();
+        playVideo(result.video.id);
+    }
+}
+
+// Add video from search
+function addVideoFromSearch() {
+    const query = searchQuery || document.getElementById('searchInput').value.trim();
+
+    if (!query) return;
+
+    let videoUrl = query;
+    let videoTitle = query;
+
+    if (query.startsWith('http') || query.includes('.mp4') || query.includes('.webm') || query.includes('.ogg')) {
+        videoUrl = query;
+        videoTitle = query.split('/').pop().split('.')[0].replace(/[-_]/g, ' ');
+    } else {
+        videoUrl = `./videos/${query.toLowerCase().replace(/\s+/g, '_')}.mp4`;
+        videoTitle = query;
+    }
+
+    const newVideo = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        title: videoTitle,
+        duration: "Unknown",
+        type: videoUrl.split('.').pop().toUpperCase(),
+        url: videoUrl,
+        thumbnail: null,
+        subtitles: null
+    };
+
+    videoLibrary = [...videoLibrary, newVideo];
+    loadLibrary();
+    updateVideoCount();
+    hideSearchModal();
+
+    showActionFeedback('add', `Added "${videoTitle}"`);
+}
+
+// Clear search
+function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    performSearch('');
+    selectedSearchIndex = 0;
+}
+
+// Enhanced keyboard shortcuts for search
+function setupSearchKeyboardShortcuts() {
+    document.addEventListener('keydown', function(e) {
+        // Open search modal with Cmd+Shift+K (Mac) or Ctrl+Shift+K (Windows/Linux)
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            showSearchModal();
+            return;
+        }
+
+        // Handle search modal navigation
+        const searchModal = document.getElementById('searchModal');
+        if (searchModal.classList.contains('show')) {
+            switch(e.key) {
+                case 'Escape':
+                    e.preventDefault();
+                    hideSearchModal();
+                    break;
+
+                case 'ArrowDown':
+                    e.preventDefault();
+                    selectedSearchIndex = Math.min(selectedSearchIndex + 1, searchResults.length - 1);
+                    updateSearchSelection();
+                    break;
+
+                case 'ArrowUp':
+                    e.preventDefault();
+                    selectedSearchIndex = Math.max(selectedSearchIndex - 1, 0);
+                    updateSearchSelection();
+                    break;
+
+                case 'Enter':
+                    e.preventDefault();
+                    executeSearchResult();
+                    break;
+
+                case 'Tab':
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        selectedSearchIndex = Math.max(selectedSearchIndex - 1, 0);
+                    } else {
+                        selectedSearchIndex = Math.min(selectedSearchIndex + 1, searchResults.length - 1);
+                    }
+                    updateSearchSelection();
+                    break;
+            }
+        }
+    });
+
+    // Search input event listener
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            performSearch(e.target.value);
+            selectedSearchIndex = 0;
+        });
+    }
+}
+
+///////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
+
 // Event Listeners
 document.addEventListener('fullscreenchange', function() {
     const playerContainer = document.getElementById('playerContainer');
@@ -4471,6 +5270,27 @@ window.debugSubtitleParsing = function(srtContent) {
     return parsed;
 };
 
+// Debug function to check what's stored
+window.debugThumbnails = function() {
+    const saved = localStorage.getItem('streamhub_thumbnails');
+    if (saved) {
+        const data = JSON.parse(saved);
+        console.log('Stored thumbnails:', Object.keys(data));
+        Object.keys(data).forEach(key => {
+            const thumb = data[key];
+            console.log(`${key}:`, {
+                title: thumb.title,
+                duration: thumb.duration,
+                type: thumb.type,
+                hasData: thumb.thumbnail ? 'Yes' : 'No',
+                size: thumb.thumbnail ? Math.round(thumb.thumbnail.length / 1024) + 'KB' : '0KB'
+            });
+        });
+    } else {
+        console.log('No thumbnails stored');
+    }
+};
+
 // Test with your Spanish subtitle content
 window.testSpanishSubtitles = function() {
     const testContent = `1
@@ -4486,6 +5306,34 @@ window.testSpanishSubtitles = function() {
 <b>I'm not representing Mesa Verde.</b>`;
 
     return debugSubtitleParsing(testContent);
+};
+
+// Add this function to test the subtitle controls
+window.testSubtitleControls = function() {
+    console.log('Testing subtitle controls...');
+
+    // Test font size
+    console.log('Testing font size buttons...');
+    adjustSubtitleSize(4);
+    setTimeout(() => adjustSubtitleSize(-4), 1000);
+
+    // Test sync
+    setTimeout(() => {
+        console.log('Testing sync buttons...');
+        adjustSubtitleSync(1.0);
+    }, 2000);
+
+    setTimeout(() => adjustSubtitleSync(-1.0), 3000);
+
+    // Test position
+    setTimeout(() => {
+        console.log('Testing position buttons...');
+        setSubtitlePosition('top-center');
+    }, 4000);
+
+    setTimeout(() => setSubtitlePosition('bottom-center'), 5000);
+
+    console.log('All tests scheduled. Watch the console and subtitle display.');
 };
 
 
