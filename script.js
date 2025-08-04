@@ -43,11 +43,11 @@ let videoLibrary = [
     },
     {
         id: 5,
-        title: "Whiplash",
+        title: "Utopia - Soundtrack",
         duration: "3:20",
         type: "MP4",
-        url: "./videos/Whiplash.mp4",
-        thumbnail: "./videos/Whiplash.jpg",
+        url: "./videos/Utopia_Soundtrack.mp4",
+        thumbnail: "./videos/Utopia_Soundtrack.png",
         subtitles: [
             { language: "English", url: "./subtitles/[cc-eng] Whiplash.srt" }
         ]
