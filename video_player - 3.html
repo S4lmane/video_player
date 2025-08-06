@@ -32,7 +32,8 @@
 
     <!-- File inputs -->
     <input type="file" id="thumbnailInput" class="file-input" accept="image/*" onchange="handleThumbnailUpload(event)">
-        <!-- Search Modal -->
+
+    <!-- Search Modal -->
     <div class="search-modal" id="searchModal">
         <div class="search-container">
             <div class="search-header">
@@ -122,7 +123,6 @@
                 <div class="subtitle-text" id="subtitleText"></div>
             </div>
 
-            <!-- subtitle modal -->
             <!-- Enhanced Subtitle Modal -->
             <div class="subtitle-modal" id="subtitleModal">
                 <div class="subtitle-modal-header">
@@ -308,6 +308,122 @@
                 </div>
             </div>
 
+            <!-- Audio Modal -->
+            <div class="audio-modal" id="audioModal">
+                <div class="audio-modal-header">
+                    <h3 class="audio-modal-title">Custom Audio</h3>
+                    <button class="audio-close-btn" onclick="hideAudioModal()">
+                        <span class="material-icons">close</span>
+                    </button>
+                </div>
+
+                <div class="audio-content">
+                    <!-- Audio Upload Section -->
+                    <div class="audio-section">
+                        <h4 class="audio-section-title">Upload Audio Track</h4>
+                        <div class="audio-upload-area" onclick="document.getElementById('audioFileInput').click()">
+                            <div class="audio-upload-icon">🎵</div>
+                            <div class="audio-upload-text">Drop audio file here or click to browse</div>
+                            <div class="audio-upload-hint">Replace or mix with video's original audio</div>
+                            <button class="audio-upload-btn">
+                                <span class="material-icons">cloud_upload</span>
+                                Choose Audio File
+                            </button>
+                            <div class="audio-upload-formats">Supports: MP3, WAV, OGG, AAC, M4A, FLAC, WMA (Max 200MB)</div>
+                        </div>
+                        <input type="file" id="audioFileInput" accept=".mp3,.wav,.ogg,.aac,.m4a,.flac,.wma,audio/*" style="display: none;" onchange="handleAudioUpload(event)">
+                    </div>
+
+                    <!-- Current Audio Tracks -->
+                    <div class="audio-section">
+                        <h4 class="audio-section-title">
+                            Audio Tracks
+                            <span class="audio-tracks-count" id="audioTracksCount">(0)</span>
+                            <button class="clear-all-audio-btn" onclick="clearAllAudioTracks()" title="Clear All Audio Tracks">
+                                <span class="material-icons">clear_all</span>
+                            </button>
+                        </h4>
+                        <div class="audio-tracks-list" id="audioTracksList">
+                            <div class="no-audio-tracks">
+                                <div class="no-audio-icon">🎵</div>
+                                <div class="no-audio-title">No custom audio tracks</div>
+                                <div class="no-audio-subtitle">Upload an audio file to replace the video's audio</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Audio Settings -->
+                    <div class="audio-section">
+                        <h4 class="audio-section-title">Audio Settings</h4>
+
+                        <!-- Volume Control -->
+                        <div class="audio-settings-group">
+                            <label class="audio-settings-label">Custom Audio Volume</label>
+                            <div class="audio-control-row">
+                                <button class="audio-adjust-btn" onclick="adjustAudioVolume(-5)">
+                                    <span class="material-icons">volume_down</span>
+                                </button>
+                                <input type="number" class="audio-input" id="audioCustomVolume" value="100" min="0" max="100" onchange="updateAudioVolume(this.value)">
+                                <button class="audio-adjust-btn" onclick="adjustAudioVolume(5)">
+                                    <span class="material-icons">volume_up</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Replacement Mode -->
+                        <div class="audio-settings-group">
+                            <label class="audio-settings-label">Audio Mode</label>
+                            <div class="audio-mode-selector">
+                                <button class="audio-mode-btn active" data-mode="replace" onclick="changeReplacementMode('replace')">
+                                    Replace Original
+                                </button>
+                                <button class="audio-mode-btn" data-mode="mix" onclick="changeReplacementMode('mix')">
+                                    Mix with Original
+                                </button>
+                                <button class="audio-mode-btn" data-mode="overlay" onclick="changeReplacementMode('overlay')">
+                                    Overlay
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Sync Adjustment -->
+                        <div class="audio-settings-group">
+                            <label class="audio-settings-label">Audio Sync</label>
+                            <div class="audio-sync-controls">
+                                <button class="audio-sync-btn backward" onclick="adjustAudioSync(-0.5)">
+                                    <span class="material-icons">fast_rewind</span>
+                                    -0.5s
+                                </button>
+                                <button class="audio-sync-btn forward" onclick="adjustAudioSync(0.5)">
+                                    <span class="material-icons">fast_forward</span>
+                                    +0.5s
+                                </button>
+                            </div>
+                            <div class="audio-sync-display">
+                                Offset: <span id="audioSyncOffset">0.0s</span>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="audio-settings-group">
+                            <label class="audio-settings-label">Quick Actions</label>
+                            <div class="audio-control-row">
+                                <button class="audio-upload-btn" onclick="restoreOriginalAudio()" style="flex: 1;">
+                                    <span class="material-icons">restore</span>
+                                    Restore Original
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audio Drag & Drop Overlay -->
+            <div class="audio-drag-overlay" id="audioDragOverlay">
+                <span class="material-icons">audiotrack</span>
+                <div>Drop audio file to add custom track</div>
+            </div>
+
             <div class="custom-controls" id="customControls">
                 <div class="progress-section">
                     <div class="progress-bar" id="progressBar">
@@ -358,6 +474,10 @@
 
                         <button class="control-btn smart-skip-btn" id="smartSkipBtn" onclick="toggleSmartSkipModal()">
                             <span class="material-icons">fast_forward</span>
+                        </button>
+
+                        <button class="control-btn audio-control-btn" id="audioBtn" onclick="showAudioModal()" title="Custom Audio">
+                            <span class="material-icons">audiotrack</span>
                         </button>
 
                         <button class="control-btn" id="castBtn" onclick="toggleCast()">
@@ -497,6 +617,22 @@
                     <span class="shortcut-key">⌘ + K</span>
                 </div>
                 <div class="shortcut-item">
+                    <span class="shortcut-action">Custom Audio</span>
+                    <span class="shortcut-key">Alt + A</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-action">Restore Original Audio</span>
+                    <span class="shortcut-key">Alt + R</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-action">Audio Volume ±</span>
+                    <span class="shortcut-key">Alt + ↑/↓</span>
+                </div>
+                <div class="shortcut-item">
+                    <span class="shortcut-action">Audio Sync ±</span>
+                    <span class="shortcut-key">Alt + ←/→</span>
+                </div>
+                <div class="shortcut-item">
                     <span class="shortcut-action">Cast to device</span>
                     <span class="shortcut-key">C</span>
                 </div>
@@ -517,6 +653,7 @@
     </div>
 
     <script src="cast-script.js"></script>
+    <script src="audio.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

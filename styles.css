@@ -3478,3 +3478,943 @@ body {
     font-family: monospace;
     margin-left: auto;
 }
+
+/* =============================================== */
+/* STREAMHUB AUDIO SYSTEM CSS                     */
+/* Custom Audio Track Replacement System          */
+/* =============================================== */
+
+/* Audio Modal Container */
+.audio-modal {
+    position: absolute;
+    bottom: 130px;
+    right: 20px;
+    width: 450px;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 200px);
+    background: linear-gradient(135deg, var(--glass), rgba(255, 255, 255, 0.02));
+    backdrop-filter: blur(30px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 0;
+    z-index: 15;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.4s var(--spring);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.audio-modal.show {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateY(-10px);
+}
+
+/* Audio Modal Header */
+.audio-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+    flex-shrink: 0;
+}
+
+.audio-modal-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.audio-modal-title::before {
+    content: '🎵';
+    font-size: 1.2rem;
+}
+
+.audio-close-btn {
+    background: var(--accent);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+}
+
+.audio-close-btn:hover {
+    background: var(--accent-hover);
+    color: var(--text-primary);
+    border-color: var(--secondary);
+}
+
+/* Audio Modal Content */
+.audio-content {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    max-height: 70vh;
+}
+
+/* Audio Section Styling */
+.audio-section {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.audio-section:last-child {
+    border-bottom: none;
+}
+
+.audio-section-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Audio Upload Section */
+.audio-upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    background: var(--accent);
+    transition: var(--transition);
+    cursor: pointer;
+    margin-bottom: 1rem;
+}
+
+.audio-upload-area:hover {
+    border-color: var(--secondary);
+    background: var(--accent-hover);
+}
+
+.audio-upload-area.dragover {
+    border-color: var(--secondary);
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.02);
+}
+
+.audio-upload-icon {
+    font-size: 3rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+.audio-upload-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.audio-upload-hint {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.audio-upload-btn {
+    padding: 0.875rem 1.5rem;
+    background: linear-gradient(135deg, var(--secondary), rgba(255, 255, 255, 0.9));
+    color: var(--primary);
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
+}
+
+.audio-upload-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 255, 255, 0.3);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), var(--secondary));
+}
+
+.audio-upload-formats {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+}
+
+/* Audio Tracks List */
+.audio-tracks-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.audio-track-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.audio-track-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: transparent;
+    transition: background 0.3s ease;
+}
+
+.audio-track-item:hover {
+    background: var(--accent-hover);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.audio-track-item.active {
+    border-color: var(--loop-color);
+    background: rgba(74, 222, 128, 0.1);
+    box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+}
+
+.audio-track-item.active::before {
+    background: linear-gradient(180deg, var(--loop-color), #22c55e);
+}
+
+.audio-track-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.audio-track-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.audio-track-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.audio-track-format {
+    background: var(--accent-hover);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.audio-track-duration,
+.audio-track-size {
+    font-family: 'Courier New', monospace;
+}
+
+.audio-track-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.audio-action-btn {
+    background: var(--accent);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+}
+
+.audio-action-btn:hover {
+    background: var(--accent-hover);
+    color: var(--text-primary);
+    border-color: var(--secondary);
+    transform: scale(1.1);
+}
+
+.audio-action-btn.active {
+    background: var(--loop-color);
+    color: var(--primary);
+    border-color: var(--loop-color);
+}
+
+.audio-action-btn.delete:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border-color: #ef4444;
+}
+
+/* No Audio Tracks State */
+.no-audio-tracks {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text-muted);
+}
+
+.no-audio-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.6;
+}
+
+.no-audio-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.no-audio-subtitle {
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+/* Audio Settings */
+.audio-settings-group {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: var(--transition);
+}
+
+.audio-settings-group:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.audio-settings-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.audio-control-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.audio-input {
+    flex: 1;
+    padding: 0.6rem 0.8rem;
+    background: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    text-align: center;
+    min-width: 60px;
+    outline: none;
+    transition: var(--transition);
+}
+
+.audio-input:focus {
+    border-color: var(--secondary);
+    background: var(--accent-hover);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.audio-adjust-btn {
+    background: var(--accent);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 0.6rem;
+    border-radius: 8px;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+}
+
+.audio-adjust-btn:hover {
+    background: var(--accent-hover);
+    border-color: var(--secondary);
+    transform: scale(1.05);
+}
+
+/* Audio Replacement Mode Selector */
+.audio-mode-selector {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.audio-mode-btn {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-align: center;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.audio-mode-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transition: left 0.3s ease;
+}
+
+.audio-mode-btn:hover {
+    background: var(--accent-hover);
+    border-color: var(--secondary);
+    color: var(--text-primary);
+}
+
+.audio-mode-btn:hover::before {
+    left: 100%;
+}
+
+.audio-mode-btn.active {
+    background: linear-gradient(135deg, var(--secondary), rgba(255, 255, 255, 0.9));
+    color: var(--primary);
+    border-color: var(--secondary);
+    font-weight: 600;
+}
+
+.audio-mode-btn.active::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    background: linear-gradient(45deg, var(--secondary), transparent, var(--secondary));
+    border-radius: 8px;
+    z-index: -1;
+    animation: modeGlow 2s ease-in-out infinite;
+}
+
+@keyframes modeGlow {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* Audio Sync Controls */
+.audio-sync-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.audio-sync-btn {
+    flex: 1;
+    padding: 0.6rem;
+    background: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.audio-sync-btn:hover {
+    background: var(--accent-hover);
+    border-color: var(--secondary);
+    transform: translateY(-1px);
+}
+
+.audio-sync-btn.backward {
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.audio-sync-btn.forward {
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.audio-sync-display {
+    text-align: center;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: 'Courier New', monospace;
+}
+
+/* Audio Control Button in Video Player */
+.audio-control-btn {
+    position: relative;
+    overflow: visible;
+}
+
+.audio-control-btn.has-custom-audio {
+    color: var(--loop-color);
+}
+
+.audio-control-btn.has-custom-audio::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background: var(--loop-color);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+    animation: audioPulse 2s ease-in-out infinite;
+}
+
+@keyframes audioPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+/* Audio Waveform Visualization (Optional) */
+.audio-visualizer {
+    width: 100%;
+    height: 60px;
+    background: var(--accent);
+    border-radius: 8px;
+    margin: 1rem 0;
+    position: relative;
+    overflow: hidden;
+    display: none; /* Hidden by default, can be enabled */
+}
+
+.audio-visualizer.active {
+    display: block;
+}
+
+.audio-visualizer canvas {
+    width: 100%;
+    height: 100%;
+}
+
+/* Drag and Drop Overlay for Audio Files */
+.audio-drag-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(74, 222, 128, 0.1);
+    backdrop-filter: blur(10px);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: var(--loop-color);
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.audio-drag-overlay.show {
+    display: flex;
+}
+
+.audio-drag-overlay .material-icons {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    animation: bounce 1s ease-in-out infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+/* Audio Tracks Count Badge */
+.audio-tracks-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: normal;
+}
+
+/* Clear All Audio Button */
+.clear-all-audio-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.clear-all-audio-btn:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* Responsive Design for Audio Modal */
+@media (max-width: 768px) {
+    .audio-modal {
+        width: calc(100vw - 20px);
+        right: 10px;
+        left: 10px;
+        max-height: 85vh;
+        bottom: 10px;
+    }
+
+    .audio-content {
+        max-height: 75vh;
+    }
+
+    .audio-section {
+        padding: 1rem;
+    }
+
+    .audio-upload-area {
+        padding: 1.5rem;
+    }
+
+    .audio-track-actions {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .audio-mode-selector {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .audio-sync-controls {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .audio-modal {
+        width: calc(100vw - 10px);
+        right: 5px;
+        left: 5px;
+        bottom: 5px;
+        max-height: 90vh;
+    }
+
+    .audio-modal-header {
+        padding: 1rem;
+    }
+
+    .audio-modal-title {
+        font-size: 1rem;
+    }
+
+    .audio-tracks-list {
+        max-height: 250px;
+    }
+
+    .audio-track-item {
+        padding: 0.75rem;
+    }
+
+    .audio-control-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+
+    .audio-adjust-btn {
+        width: 100%;
+        height: 40px;
+    }
+}
+
+/* Loading States */
+.audio-loading {
+    opacity: 0.6;
+    pointer-events: none;
+    position: relative;
+}
+
+.audio-loading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.audio-loading::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid var(--secondary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    z-index: 1;
+}
+
+/* Custom Scrollbar for Audio Lists */
+.audio-tracks-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.audio-tracks-list::-webkit-scrollbar-track {
+    background: var(--accent);
+    border-radius: 3px;
+}
+
+.audio-tracks-list::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+    transition: background 0.3s ease;
+}
+
+.audio-tracks-list::-webkit-scrollbar-thumb:hover {
+    background: var(--secondary);
+}
+
+/* Large File Status Indicators */
+.audio-status-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
+.audio-status-badge.large-file {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.audio-status-badge.needs-reupload {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    animation: needsReuploadPulse 2s ease-in-out infinite;
+}
+
+@keyframes needsReuploadPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.audio-track-size.large-size {
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+.audio-track-item.needs-reupload {
+    opacity: 0.7;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.audio-track-item.needs-reupload .audio-track-title {
+    color: var(--text-secondary);
+}
+
+.audio-action-btn.reupload {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.audio-action-btn.reupload:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #ef4444;
+    transform: scale(1.1);
+}
+
+/* Large File Warning Dialog Styles */
+.large-file-warning {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.large-file-warning.show {
+    display: flex;
+}
+
+.large-file-dialog {
+    background: var(--glass);
+    backdrop-filter: blur(30px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.large-file-dialog .material-icons {
+    font-size: 3rem;
+    color: #fbbf24;
+    margin-bottom: 1rem;
+}
+
+.large-file-dialog h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+}
+
+.large-file-dialog p {
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    line-height: 1.5;
+}
+
+.large-file-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.large-file-btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    border: none;
+}
+
+.large-file-btn.primary {
+    background: var(--secondary);
+    color: var(--primary);
+}
+
+.large-file-btn.secondary {
+    background: var(--accent);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.large-file-btn:hover {
+    transform: translateY(-2px);
+}
+
+/* Progress indicator for large file uploads */
+.audio-upload-progress {
+    width: 100%;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    margin-top: 1rem;
+    overflow: hidden;
+    display: none;
+}
+
+.audio-upload-progress.show {
+    display: block;
+}
+
+.audio-upload-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--secondary), #4ade80);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 2px;
+}
+
+/* Memory usage warning */
+.memory-warning {
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.memory-warning .material-icons {
+    color: #fbbf24;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.memory-warning-content {
+    flex: 1;
+}
+
+.memory-warning-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #fbbf24;
+    margin-bottom: 0.25rem;
+}
+
+.memory-warning-text {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
